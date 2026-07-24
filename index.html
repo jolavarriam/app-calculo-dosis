@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Hello World PWA</title>
+
+  <!-- Tema y colores para navegadores móviles -->
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="description" content="Una PWA de ejemplo Hello World" />
+
+  <!-- Manifest de la PWA -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Icono para iOS (Add to Home Screen) -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Hello PWA" />
+
+  <!-- Icono para navegadores en general -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>👋 Hola Mundo</h1>
+    <p>Esta es una PWA (Progressive Web App) mínima.</p>
+    <p id="status" class="status">Comprobando conexión...</p>
+    <button id="installBtn" class="install-btn" hidden>Instalar app</button>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
