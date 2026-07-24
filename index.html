@@ -3,33 +3,198 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Hello World PWA</title>
+  <title>Cálculo de Dosis de Aplicación</title>
 
-  <!-- Tema y colores para navegadores móviles -->
-  <meta name="theme-color" content="#4f46e5" />
-  <meta name="description" content="Una PWA de ejemplo Hello World" />
+  <meta name="theme-color" content="#26392e" />
+  <meta name="description" content="Calculadora de dosis de aplicación: calibración de boquilla, mojamiento y caldo" />
 
-  <!-- Manifest de la PWA -->
   <link rel="manifest" href="manifest.json" />
 
-  <!-- Icono para iOS (Add to Home Screen) -->
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Hello PWA" />
+  <meta name="apple-mobile-web-app-title" content="Dosis App" />
 
-  <!-- Icono para navegadores en general -->
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="container">
-    <h1>👋 Hola Mundo</h1>
-    <p>Esta es una PWA (Progressive Web App) mínima.</p>
-    <p id="status" class="status">Comprobando conexión...</p>
-    <button id="installBtn" class="install-btn" hidden>Instalar app</button>
-  </main>
+  <div class="page">
+
+    <header class="topbar">
+      <div class="topbar__title">
+        <span class="topbar__eyebrow">Calibración de pulverización</span>
+        <h1>Cálculo de dosis de aplicación</h1>
+      </div>
+      <p id="status" class="status">Comprobando conexión…</p>
+      <button id="installBtn" class="install-btn" hidden>Instalar app</button>
+    </header>
+
+    <form id="calcForm" class="sheet" autocomplete="off" novalidate>
+
+      <!-- 1. Calibración de boquilla -->
+      <section class="card" data-step="1">
+        <h2><span class="tick">01</span>Calibración de boquilla</h2>
+        <p class="hint">Recolecta el caudal de la boquilla durante 20 segundos. Repite la prueba 3 veces para promediar.</p>
+
+        <div class="calib-grid">
+          <div class="calib-grid__head">
+            <span>Muestra</span><span>Volumen (L) / 20 s</span><span>Gasto de boquilla (L/min)</span>
+          </div>
+
+          <div class="calib-row" data-row="1">
+            <span class="calib-row__label">1</span>
+            <div class="field">
+              <input type="number" id="vol1" name="vol1" step="0.01" min="0.01" max="10" placeholder="Ej: 0,45" required />
+              <span class="field__error" id="err-vol1"></span>
+            </div>
+            <output class="computed" id="gasto1">–</output>
+          </div>
+
+          <div class="calib-row" data-row="2">
+            <span class="calib-row__label">2</span>
+            <div class="field">
+              <input type="number" id="vol2" name="vol2" step="0.01" min="0.01" max="10" placeholder="Ej: 0,47" required />
+              <span class="field__error" id="err-vol2"></span>
+            </div>
+            <output class="computed" id="gasto2">–</output>
+          </div>
+
+          <div class="calib-row" data-row="3">
+            <span class="calib-row__label">3</span>
+            <div class="field">
+              <input type="number" id="vol3" name="vol3" step="0.01" min="0.01" max="10" placeholder="Ej: 0,46" required />
+              <span class="field__error" id="err-vol3"></span>
+            </div>
+            <output class="computed" id="gasto3">–</output>
+          </div>
+        </div>
+
+        <div class="result-line">
+          <span>Gasto de boquilla promedio</span>
+          <output class="computed computed--lg" id="gastoProm">– L/min</output>
+        </div>
+      </section>
+
+      <!-- 2. Ancho de boquilla -->
+      <section class="card" data-step="2">
+        <h2><span class="tick">02</span>Ancho de boquilla</h2>
+        <p class="hint">Ancho cubierto por la boquilla o el botalón, en metros.</p>
+        <div class="field field--solo">
+          <label for="anchoBoquilla">Ancho de boquilla (m)</label>
+          <input type="number" id="anchoBoquilla" name="anchoBoquilla" step="0.01" min="0.05" max="50" placeholder="Ej: 0,5" required />
+          <span class="field__error" id="err-anchoBoquilla"></span>
+        </div>
+      </section>
+
+      <!-- 3. Avance -->
+      <section class="card" data-step="3">
+        <h2><span class="tick">03</span>Velocidad de avance</h2>
+        <p class="hint">Velocidad de desplazamiento durante la aplicación.</p>
+        <div class="two-col">
+          <div class="field">
+            <label for="avanceMs">Avance (m/s)</label>
+            <input type="number" id="avanceMs" name="avanceMs" step="0.01" min="0.05" max="5" placeholder="Ej: 1,1" required />
+            <span class="field__error" id="err-avanceMs"></span>
+          </div>
+          <div class="field">
+            <label>Avance (m/min)</label>
+            <output class="computed" id="avanceMmin">–</output>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Cobertura -->
+      <section class="card card--computed" data-step="4">
+        <h2><span class="tick">04</span>Cobertura</h2>
+        <p class="hint">Ancho de boquilla × avance.</p>
+        <div class="result-line">
+          <span>Superficie cubierta</span>
+          <output class="computed computed--lg" id="m2min">– m²/min</output>
+        </div>
+      </section>
+
+      <!-- 5. Mojamiento -->
+      <section class="card card--computed" data-step="5">
+        <h2><span class="tick">05</span>Mojamiento</h2>
+        <p class="hint">Gasto de boquilla promedio × 10.000 ÷ cobertura.</p>
+        <div class="result-line">
+          <span>Mojamiento</span>
+          <output class="computed computed--lg" id="mojamiento">– L/ha</output>
+        </div>
+      </section>
+
+      <!-- 6. Área de ensayo -->
+      <section class="card" data-step="6">
+        <h2><span class="tick">06</span>Área de ensayo</h2>
+        <p class="hint">Superficie total sobre la que se aplicará el producto.</p>
+        <div class="field field--solo">
+          <label for="areaEnsayo">Área de ensayo (m²)</label>
+          <input type="number" id="areaEnsayo" name="areaEnsayo" step="0.01" min="1" max="100000" placeholder="Ej: 500" required />
+          <span class="field__error" id="err-areaEnsayo"></span>
+        </div>
+      </section>
+
+      <!-- 7. Caldo -->
+      <section class="card" data-step="7">
+        <h2><span class="tick">07</span>Caldo</h2>
+        <p class="hint">Volumen de mezcla necesario para cubrir el área de ensayo.</p>
+
+        <div class="result-line">
+          <span>Caldo necesario (calculado)</span>
+          <output class="computed computed--lg" id="caldoCalc">– L</output>
+        </div>
+
+        <div class="two-col">
+          <div class="field">
+            <label for="remanente">Remanente mochila (L)</label>
+            <input type="number" id="remanente" name="remanente" step="0.01" min="0" max="200" value="0.8" />
+            <span class="field__error" id="err-remanente"></span>
+            <span class="field__note">Valor por defecto: 0,8 L</span>
+          </div>
+          <div class="field">
+            <label>Caldo total (calculado)</label>
+            <output class="computed" id="caldoTotal">–</output>
+          </div>
+        </div>
+
+        <div class="field field--solo">
+          <label for="caldoPreparar">Caldo a preparar (L) — redondeado a la capacidad real del estanque</label>
+          <input type="number" id="caldoPreparar" name="caldoPreparar" step="0.01" min="0.01" max="100000" placeholder="Ej: 22 (usa el caldo total como referencia)" required />
+          <span class="field__error" id="err-caldoPreparar"></span>
+          <span class="field__note" id="note-caldoPreparar">Usa el caldo total calculado como referencia y ajústalo a la capacidad real de tu estanque o mochila.</span>
+        </div>
+      </section>
+
+      <!-- 8. Dosis -->
+      <section class="card card--final" data-step="8">
+        <h2><span class="tick">08</span>Dosis</h2>
+        <p class="hint">Cantidad de producto a incorporar en cada carga de caldo.</p>
+
+        <div class="field field--solo">
+          <label for="productoHa">Producto (kg o L) por hectárea</label>
+          <input type="number" id="productoHa" name="productoHa" step="0.01" min="0.001" max="1000" placeholder="Ej: 1,5" required />
+          <span class="field__error" id="err-productoHa"></span>
+        </div>
+
+        <div class="final-result">
+          <div class="final-result__label">Dosis por carga de caldo</div>
+          <output class="final-result__value" id="dosisResultado">–</output>
+          <div class="final-result__unit">g (o mL) por carga</div>
+        </div>
+      </section>
+
+      <p class="disclaimer">
+        Los rangos de validación de cada campo son referenciales, pensados para detectar valores
+        atípicos o mal ingresados. Ajusta tu criterio agronómico si tu caso particular lo requiere.
+      </p>
+    </form>
+  </div>
 
   <script src="app.js"></script>
 </body>
