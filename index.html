@@ -22,15 +22,43 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Aplica el tema guardado antes de pintar, para evitar parpadeos -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("dosis-app-theme");
+        var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
 </head>
 <body>
   <div class="page">
 
     <header class="topbar">
-      <div class="topbar__title">
-        <span class="topbar__eyebrow">Calibración de pulverización</span>
-        <h1>Cálculo de dosis de aplicación</h1>
+      <div class="topbar__row">
+        <div class="topbar__title">
+          <span class="topbar__eyebrow">Calibración de pulverización</span>
+          <h1>Cálculo de dosis de aplicación</h1>
+        </div>
+
+        <button
+          id="themeToggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Cambiar entre tema claro y oscuro"
+          aria-pressed="false"
+        >
+          <span class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">☀</span>
+          <span class="theme-toggle__thumb" aria-hidden="true"></span>
+          <span class="theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true">☾</span>
+        </button>
       </div>
+
       <p id="status" class="status">Comprobando conexión…</p>
       <button id="installBtn" class="install-btn" hidden>Instalar app</button>
     </header>

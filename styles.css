@@ -1,5 +1,5 @@
 :root {
-  /* Paleta: cuaderno de campo agronómico */
+  /* Paleta: cuaderno de campo agronómico (tema claro) */
   --ink: #26392e;         /* verde pino profundo — títulos, texto fuerte */
   --ink-soft: #4a5c50;    /* texto secundario */
   --paper: #edeae1;       /* fondo general, pergamino cálido */
@@ -11,13 +11,45 @@
   --brick: #a8402f;       /* error, más terroso que un rojo puro */
   --brick-light: #f6e3df;
 
+  --contrast-bg: #26392e;
+  --contrast-text: #ffffff;
+  --contrast-accent: #f1e3c6;
+
+  --input-bg: #ffffff;
+  --card-stripe: #f5f3ec;
+
   --font-display: "Fraunces", serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
+[data-theme="dark"] {
+  /* Misma paleta, leída de noche */
+  --ink: #eae6da;
+  --ink-soft: #b7c2b8;
+  --paper: #1a2320;
+  --card: #222d27;
+  --line: #3a473e;
+  --ochre: #e0ac52;
+  --ochre-light: #362a16;
+  --sage: #8bb992;
+  --brick: #e2685a;
+  --brick-light: #3a201c;
+
+  --contrast-bg: #12211a;
+  --contrast-text: #f3efe4;
+  --contrast-accent: #e0ac52;
+
+  --input-bg: #26322b;
+  --card-stripe: #263129;
+}
+
 * {
   box-sizing: border-box;
+}
+
+html {
+  color-scheme: light dark;
 }
 
 body {
@@ -30,6 +62,7 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .page {
@@ -43,6 +76,14 @@ body {
   padding: 0.5rem 0 1.75rem;
   border-bottom: 2px solid var(--ink);
   margin-bottom: 1.75rem;
+  transition: border-color 0.25s ease;
+}
+
+.topbar__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .topbar__eyebrow {
@@ -89,6 +130,53 @@ body {
   background: var(--sage);
 }
 
+/* Interruptor de tema — llave de luz */
+.theme-toggle {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 68px;
+  height: 34px;
+  padding: 0 8px;
+  margin-top: 0.15rem;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.theme-toggle__icon {
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  z-index: 1;
+}
+
+.theme-toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ochre);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.25s ease, background-color 0.25s ease;
+}
+
+[data-theme="dark"] .theme-toggle__thumb {
+  transform: translateX(34px);
+  background: var(--ochre);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--ochre);
+  outline-offset: 2px;
+}
+
 /* Tarjetas de sección */
 .sheet {
   display: flex;
@@ -102,6 +190,7 @@ body {
   border-radius: 10px;
   padding: 1.4rem 1.4rem 1.6rem;
   box-shadow: 0 1px 0 rgba(38, 57, 46, 0.03);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
 .card--computed {
@@ -109,8 +198,8 @@ body {
     135deg,
     var(--card),
     var(--card) 10px,
-    #f5f3ec 10px,
-    #f5f3ec 20px
+    var(--card-stripe) 10px,
+    var(--card-stripe) 20px
   );
 }
 
@@ -172,7 +261,7 @@ body {
   padding: 0.65rem 0.75rem;
   border: 1.5px solid var(--line);
   border-radius: 7px;
-  background: white;
+  background: var(--input-bg);
   color: var(--ink);
   width: 100%;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -302,9 +391,10 @@ body {
 .final-result {
   margin-top: 1.4rem;
   padding: 1.4rem;
-  background: var(--ink);
+  background: var(--contrast-bg);
   border-radius: 10px;
   text-align: center;
+  transition: background-color 0.25s ease;
 }
 
 .final-result__label {
@@ -312,7 +402,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ochre-light);
+  color: var(--contrast-accent);
   margin-bottom: 0.5rem;
 }
 
@@ -322,7 +412,7 @@ body {
   font-weight: 600;
   font-size: 2.6rem;
   line-height: 1.1;
-  color: white;
+  color: var(--contrast-text);
 }
 
 .final-result__value.has-error {
@@ -333,7 +423,7 @@ body {
 .final-result__unit {
   margin-top: 0.35rem;
   font-size: 0.8rem;
-  color: var(--ochre-light);
+  color: var(--contrast-accent);
   opacity: 0.85;
 }
 

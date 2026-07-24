@@ -1,4 +1,53 @@
 /* ---------------------------------------------------------------
+   Tema claro / oscuro (con memoria en localStorage)
+--------------------------------------------------------------- */
+const THEME_KEY = "dosis-app-theme";
+const themeToggle = document.getElementById("themeToggle");
+const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+const THEME_COLORS = { light: "#26392e", dark: "#12211a" };
+
+function getStoredTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+function storeTheme(theme) {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch (e) {
+    /* localStorage no disponible (modo privado, etc.): el tema no se recordará */
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  themeToggle.setAttribute("aria-pressed", String(theme === "dark"));
+  if (metaThemeColor) metaThemeColor.setAttribute("content", THEME_COLORS[theme]);
+}
+
+// El <script> del <head> ya aplicó el tema correcto antes de pintar;
+// aquí solo sincronizamos el estado del botón con lo que quedó aplicado.
+let currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+applyTheme(currentTheme);
+
+themeToggle.addEventListener("click", () => {
+  currentTheme = currentTheme === "dark" ? "light" : "dark";
+  applyTheme(currentTheme);
+  storeTheme(currentTheme);
+});
+
+// Si el usuario nunca eligió manualmente un tema, seguir el tema del sistema en vivo
+const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+systemThemeQuery.addEventListener("change", (event) => {
+  if (getStoredTheme()) return; // ya eligió un tema manualmente, no lo pisamos
+  currentTheme = event.matches ? "dark" : "light";
+  applyTheme(currentTheme);
+});
+
+/* ---------------------------------------------------------------
    Estado de conexión + PWA (igual que antes)
 --------------------------------------------------------------- */
 const statusEl = document.getElementById("status");
