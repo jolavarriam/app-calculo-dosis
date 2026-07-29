@@ -1,7 +1,7 @@
 {
-  "name": "Hello World PWA",
-  "short_name": "Hello PWA",
-  "description": "Una PWA de ejemplo Hello World",
+  "name": "Cálculo de Dosis de Aplicación",
+  "short_name": "Dosis App",
+  "description": "Calculadora de dosis de aplicación: calibración de boquilla, mojamiento y caldo",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
