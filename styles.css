@@ -1,49 +1,71 @@
+/* ==========================================================
+   Design tokens
+   ========================================================== */
 :root {
-  /* Paleta: cuaderno de campo agronómico (tema claro) */
-  --ink: #26392e;         /* verde pino profundo — títulos, texto fuerte */
-  --ink-soft: #4a5c50;    /* texto secundario */
-  --paper: #edeae1;       /* fondo general, pergamino cálido */
-  --card: #fbfaf5;        /* tarjetas */
-  --line: #d8d2c2;        /* líneas y bordes suaves */
-  --ochre: #b8862e;       /* acento — ocre / trigo, marca lo calculado */
-  --ochre-light: #f1e3c6;
-  --sage: #6b8f71;        /* éxito / positivo */
-  --brick: #a8402f;       /* error, más terroso que un rojo puro */
-  --brick-light: #f6e3df;
-
-  --contrast-bg: #26392e;
-  --contrast-text: #ffffff;
-  --contrast-accent: #f1e3c6;
-
+  /* Superficie — modo claro, "alta gama" */
+  --paper: #f7f7f5;
+  --card: rgba(255, 255, 255, 0.86);
+  --card-solid: #ffffff;
+  --line: rgba(15, 23, 42, 0.09);
   --input-bg: #ffffff;
-  --card-stripe: #f5f3ec;
 
-  --font-display: "Fraunces", serif;
+  /* Texto */
+  --ink: #12151a;
+  --ink-soft: #5b6472;
+
+  /* Acento único — ámbar apagado */
+  --accent: #9c6f2e;
+  --on-accent: #ffffff;
+
+  /* Estados semánticos */
+  --success: #3f7a5c;
+  --error: #b3453a;
+
+  /* Panel de resultado final — siempre elevado y oscuro, en ambos temas */
+  --contrast-bg: #12151a;
+  --contrast-text: #f5f5f4;
+  --contrast-accent: #d9a86c;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 16px 40px -18px rgba(15, 23, 42, 0.28), 0 2px 8px rgba(15, 23, 42, 0.05);
+
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  color-scheme: light;
 }
 
 [data-theme="dark"] {
-  /* Misma paleta, leída de noche */
-  --ink: #eae6da;
-  --ink-soft: #b7c2b8;
-  --paper: #1a2320;
-  --card: #222d27;
-  --line: #3a473e;
-  --ochre: #e0ac52;
-  --ochre-light: #362a16;
-  --sage: #8bb992;
-  --brick: #e2685a;
-  --brick-light: #3a201c;
+  /* Superficie — modo oscuro, "midnight minimal" */
+  --paper: #0f172a;
+  --card: rgba(30, 41, 59, 0.55);
+  --card-solid: #161f34;
+  --line: rgba(148, 163, 184, 0.14);
+  --input-bg: rgba(15, 23, 42, 0.55);
 
-  --contrast-bg: #12211a;
-  --contrast-text: #f3efe4;
-  --contrast-accent: #e0ac52;
+  --ink: #e7ebf2;
+  --ink-soft: #93a0b4;
 
-  --input-bg: #26322b;
-  --card-stripe: #263129;
+  --accent: #d9a86c;
+  --on-accent: #1a1206;
+
+  --success: #6fbf95;
+  --error: #e08a7d;
+
+  --contrast-bg: #161f34;
+  --contrast-text: #f5f3ee;
+  --contrast-accent: #eab676;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 20px 48px -20px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
 }
 
+/* ==========================================================
+   Base
+   ========================================================== */
 * {
   box-sizing: border-box;
 }
@@ -55,28 +77,41 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--paper);
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px);
-  background-size: 100% 44px;
+  background:
+    radial-gradient(60rem 30rem at 50% -10%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%),
+    var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.icon {
+  width: 1.1em;
+  height: 1.1em;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
 }
 
 .page {
   max-width: 640px;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 4rem;
+  padding: 2rem 1.25rem 4rem;
 }
 
-/* Encabezado */
+/* ==========================================================
+   Encabezado
+   ========================================================== */
 .topbar {
-  padding: 0.5rem 0 1.75rem;
-  border-bottom: 2px solid var(--ink);
+  padding: 0 0 1.75rem;
   margin-bottom: 1.75rem;
-  transition: border-color 0.25s ease;
+  border-bottom: 1px solid var(--line);
+  transition: border-color 0.3s ease;
 }
 
 .topbar__row {
@@ -90,94 +125,135 @@ body {
   display: block;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  letter-spacing: 0.14em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ochre);
-  margin-bottom: 0.35rem;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
 }
 
 .topbar h1 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.9rem;
-  line-height: 1.15;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1.65rem;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   margin: 0;
   color: var(--ink);
 }
 
 .status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--ink-soft);
-  margin: 0.6rem 0 0;
+  margin: 0.85rem 0 0;
+}
+
+.status__icon {
+  display: none;
+  color: var(--ink-soft);
+}
+
+.status.is-online .status__icon--online {
+  display: block;
+  color: var(--success);
+}
+
+.status.is-offline .status__icon--offline {
+  display: block;
+  color: var(--error);
 }
 
 .install-btn {
-  margin-top: 0.85rem;
-  padding: 0.6rem 1.3rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.6rem 1.15rem;
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--card);
-  background: var(--ink);
+  font-size: 0.88rem;
+  color: var(--on-accent);
+  background: var(--accent);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: filter 0.15s ease, transform 0.15s ease;
 }
 
 .install-btn:hover {
-  background: var(--sage);
+  filter: brightness(1.08);
 }
 
-/* Interruptor de tema — llave de luz */
+.install-btn:active {
+  transform: translateY(1px);
+}
+
+/* Interruptor de tema */
 .theme-toggle {
   position: relative;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 68px;
-  height: 34px;
-  padding: 0 8px;
-  margin-top: 0.15rem;
-  background: var(--card);
-  border: 1.5px solid var(--line);
+  width: 60px;
+  height: 30px;
+  padding: 0 7px;
+  background: var(--card-solid);
+  border: 1px solid var(--line);
   border-radius: 999px;
   cursor: pointer;
-  transition: background-color 0.25s ease, border-color 0.25s ease;
+  box-shadow: var(--shadow-sm) inset;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .theme-toggle__icon {
-  font-size: 0.85rem;
-  line-height: 1;
   color: var(--ink-soft);
+  width: 0.95em;
+  height: 0.95em;
   z-index: 1;
+  opacity: 0.55;
+  transition: opacity 0.25s ease, color 0.25s ease;
+}
+
+[data-theme="light"] .theme-toggle__icon--sun {
+  opacity: 1;
+  color: var(--accent);
+}
+
+[data-theme="dark"] .theme-toggle__icon--moon {
+  opacity: 1;
+  color: var(--accent);
 }
 
 .theme-toggle__thumb {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 26px;
-  height: 26px;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: var(--ochre);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform 0.25s ease, background-color 0.25s ease;
+  background: var(--accent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: transform 0.25s ease, background-color 0.3s ease;
 }
 
 [data-theme="dark"] .theme-toggle__thumb {
-  transform: translateX(34px);
-  background: var(--ochre);
+  transform: translateX(30px);
 }
 
 .theme-toggle:focus-visible {
-  outline: 2px solid var(--ochre);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* Tarjetas de sección */
+/* ==========================================================
+   Tarjetas de sección
+   ========================================================== */
 .sheet {
   display: flex;
   flex-direction: column;
@@ -186,62 +262,69 @@ body {
 
 .card {
   background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 1.4rem 1.4rem 1.6rem;
-  box-shadow: 0 1px 0 rgba(38, 57, 46, 0.03);
-  transition: background-color 0.25s ease, border-color 0.25s ease;
+  border-radius: 14px;
+  padding: 1.5rem 1.5rem 1.7rem;
+  box-shadow: var(--shadow-md);
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .card--computed {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--card),
-    var(--card) 10px,
-    var(--card-stripe) 10px,
-    var(--card-stripe) 20px
-  );
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--line));
 }
 
 .card--final {
-  border-color: var(--ink);
-  border-width: 1.5px;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
 }
 
 .card h2 {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  font-family: var(--font-display);
+  gap: 0.75rem;
+  font-family: var(--font-body);
   font-weight: 600;
-  font-size: 1.15rem;
-  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.4rem;
   color: var(--ink);
 }
 
 .tick {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--card);
-  background: var(--ink);
-  border-radius: 4px;
-  padding: 0.2rem 0.45rem;
-  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.tick .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
 }
 
 .hint {
-  margin: 0 0 1.1rem;
+  margin: 0 0 1.15rem;
   font-size: 0.86rem;
   color: var(--ink-soft);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-/* Campos */
+/* ==========================================================
+   Campos
+   ========================================================== */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
   min-width: 0;
 }
 
@@ -257,41 +340,51 @@ body {
 
 .field input {
   font-family: var(--font-mono);
-  font-size: 1rem;
-  padding: 0.65rem 0.75rem;
-  border: 1.5px solid var(--line);
-  border-radius: 7px;
+  font-size: 0.98rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
   background: var(--input-bg);
   color: var(--ink);
   width: 100%;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.3s ease;
+}
+
+.field input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.55;
 }
 
 .field input:focus {
   outline: none;
-  border-color: var(--ochre);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .field input.is-invalid {
-  border-color: var(--brick);
-  background: var(--brick-light);
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 14%, transparent);
 }
 
 .field input.is-valid {
-  border-color: var(--sage);
+  border-color: color-mix(in srgb, var(--success) 55%, var(--line));
 }
 
 .field__error {
   min-height: 1.1rem;
   font-size: 0.78rem;
-  color: var(--brick);
+  color: var(--error);
   font-weight: 500;
 }
 
 .field__note {
   font-size: 0.76rem;
   color: var(--ink-soft);
-  font-style: italic;
+}
+
+.field__note.is-warning {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .two-col {
@@ -307,26 +400,29 @@ body {
   }
 }
 
-/* Valores calculados */
+/* ==========================================================
+   Valores calculados
+   ========================================================== */
 .computed {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--ochre);
-  background: var(--ochre-light);
-  border-radius: 7px;
-  padding: 0.65rem 0.75rem;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 9px;
+  padding: 0.62rem 0.8rem;
   display: block;
-  font-size: 1rem;
-  border: 1.5px solid transparent;
+  font-size: 0.98rem;
 }
 
 .computed--lg {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
 }
 
 .computed.has-error {
-  color: var(--brick);
-  background: var(--brick-light);
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  border-color: color-mix(in srgb, var(--error) 18%, transparent);
 }
 
 .result-line {
@@ -348,29 +444,31 @@ body {
   text-align: right;
 }
 
-/* Tabla de calibración */
+/* ==========================================================
+   Tabla de calibración
+   ========================================================== */
 .calib-grid {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.15rem;
 }
 
 .calib-grid__head {
   display: grid;
-  grid-template-columns: 2rem 1fr 1fr;
+  grid-template-columns: 2.1rem 1fr 1fr;
   gap: 0.6rem;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--ink-soft);
   padding: 0 0.1rem;
 }
 
 .calib-row {
   display: grid;
-  grid-template-columns: 2rem 1fr 1fr;
+  grid-template-columns: 2.1rem 1fr 1fr;
   gap: 0.6rem;
   align-items: start;
 }
@@ -379,65 +477,65 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 2.6rem;
+  height: 2.7rem;
   font-family: var(--font-mono);
   font-weight: 600;
+  font-size: 0.85rem;
   color: var(--ink-soft);
-  border: 1.5px dashed var(--line);
-  border-radius: 7px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 9px;
 }
 
-/* Resultado final */
+/* ==========================================================
+   Resultado final
+   ========================================================== */
 .final-result {
-  margin-top: 1.4rem;
-  padding: 1.4rem;
-  background: var(--contrast-bg);
-  border-radius: 10px;
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(165deg, var(--contrast-bg), color-mix(in srgb, var(--contrast-bg) 88%, black));
+  border: 1px solid color-mix(in srgb, var(--contrast-accent) 25%, transparent);
+  border-radius: 12px;
   text-align: center;
-  transition: background-color 0.25s ease;
+  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--contrast-accent) 35%, transparent);
+  transition: background-color 0.3s ease;
 }
 
 .final-result__label {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--contrast-accent);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.55rem;
 }
 
 .final-result__value {
   display: block;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 2.6rem;
+  font-size: 2.5rem;
+  letter-spacing: -0.01em;
   line-height: 1.1;
   color: var(--contrast-text);
 }
 
 .final-result__value.has-error {
-  font-size: 1.05rem;
-  color: var(--brick-light);
+  font-size: 1.02rem;
+  color: color-mix(in srgb, var(--error) 70%, var(--contrast-text));
 }
 
 .final-result__unit {
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
   font-size: 0.8rem;
   color: var(--contrast-accent);
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 .disclaimer {
   font-size: 0.76rem;
   color: var(--ink-soft);
-  line-height: 1.5;
+  line-height: 1.55;
   padding: 0 0.2rem;
   margin-top: 0.4rem;
-}
-
-/* Advertencias suaves (no bloquean el cálculo) */
-.field__note.is-warning {
-  color: var(--ochre);
-  font-style: normal;
-  font-weight: 600;
 }

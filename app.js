@@ -4,7 +4,7 @@
 const THEME_KEY = "dosis-app-theme";
 const themeToggle = document.getElementById("themeToggle");
 const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-const THEME_COLORS = { light: "#26392e", dark: "#12211a" };
+const THEME_COLORS = { light: "#f7f7f5", dark: "#0f172a" };
 
 function getStoredTheme() {
   try {
@@ -51,11 +51,15 @@ systemThemeQuery.addEventListener("change", (event) => {
    Estado de conexión + PWA (igual que antes)
 --------------------------------------------------------------- */
 const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
 
 function updateOnlineStatus() {
-  statusEl.textContent = navigator.onLine
-    ? "✅ Conectado a internet"
-    : "📴 Sin conexión (funcionando offline)";
+  const online = navigator.onLine;
+  statusEl.classList.toggle("is-online", online);
+  statusEl.classList.toggle("is-offline", !online);
+  statusText.textContent = online
+    ? "Conectado a internet"
+    : "Sin conexión (funcionando offline)";
 }
 window.addEventListener("online", updateOnlineStatus);
 window.addEventListener("offline", updateOnlineStatus);
