@@ -110,42 +110,23 @@
           </span>
           Calibración de boquilla
         </h2>
-        <p class="hint">Recolecta el caudal de la boquilla durante 20 segundos. Repite la prueba 3 veces para promediar.</p>
+        <p class="hint">Recolecta el caudal de la boquilla durante 20 segundos. Agrega tantas muestras como quieras repetir para promediar.</p>
 
         <div class="calib-grid">
           <div class="calib-grid__head">
-            <span>Muestra</span><span>Volumen (L) / 20 s</span><span>Gasto de boquilla (L/min)</span>
+            <span aria-hidden="true"></span><span>Volumen (L) / 20 s</span><span>Gasto (L/min)</span><span aria-hidden="true"></span>
           </div>
-
-          <div class="calib-row" data-row="1">
-            <span class="calib-row__label">1</span>
-            <div class="field">
-              <input type="number" id="vol1" name="vol1" step="0.01" min="0.01" max="10" placeholder="Ej: 0,45" required />
-              <span class="field__error" id="err-vol1"></span>
-            </div>
-            <output class="computed" id="gasto1">–</output>
-          </div>
-
-          <div class="calib-row" data-row="2">
-            <span class="calib-row__label">2</span>
-            <div class="field">
-              <input type="number" id="vol2" name="vol2" step="0.01" min="0.01" max="10" placeholder="Ej: 0,47" required />
-              <span class="field__error" id="err-vol2"></span>
-            </div>
-            <output class="computed" id="gasto2">–</output>
-          </div>
-
-          <div class="calib-row" data-row="3">
-            <span class="calib-row__label">3</span>
-            <div class="field">
-              <input type="number" id="vol3" name="vol3" step="0.01" min="0.01" max="10" placeholder="Ej: 0,46" required />
-              <span class="field__error" id="err-vol3"></span>
-            </div>
-            <output class="computed" id="gasto3">–</output>
-          </div>
+          <div class="calib-rows" id="calibRows"><!-- filas generadas por JS --></div>
         </div>
 
-        <div class="result-line">
+        <button id="addSampleBtn" type="button" class="add-sample-btn">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"></path>
+          </svg>
+          Agregar muestra
+        </button>
+
+        <div class="result-line result-line--total">
           <span>Gasto de boquilla promedio</span>
           <output class="computed computed--lg" id="gastoProm">– L/min</output>
         </div>

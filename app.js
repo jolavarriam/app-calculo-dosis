@@ -109,9 +109,6 @@ window.addEventListener("appinstalled", () => {
 // detectar valores fuera de lo razonable o mal ingresados), no límites
 // normativos.
 const FIELD_RULES = {
-  vol1: { required: true, min: 0.01, max: 10, label: "Volumen (L) / 20 s — muestra 1" },
-  vol2: { required: true, min: 0.01, max: 10, label: "Volumen (L) / 20 s — muestra 2" },
-  vol3: { required: true, min: 0.01, max: 10, label: "Volumen (L) / 20 s — muestra 3" },
   anchoBoquilla: { required: true, min: 0.05, max: 50, label: "Ancho de boquilla (m)" },
   avanceMs: { required: true, min: 0.05, max: 5, label: "Avance (m/s)" },
   areaEnsayo: { required: true, min: 1, max: 100000, label: "Área de ensayo (m²)" },
@@ -120,7 +117,12 @@ const FIELD_RULES = {
   productoHa: { required: true, min: 0.001, max: 1000, label: "Producto por hectárea" },
 };
 
+const SAMPLE_RULE = { required: true, min: 0.01, max: 10 };
+const MAX_SAMPLES = 20;
+
 const form = document.getElementById("calcForm");
+const calibRowsEl = document.getElementById("calibRows");
+const addSampleBtn = document.getElementById("addSampleBtn");
 
 // Snapshot del último cálculo válido, usado por el botón "Generar PDF"
 let lastReportState = null;
@@ -136,9 +138,8 @@ function pdfFileStamp() {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 }
 
-/** Lee y valida un campo. Devuelve { value, error, isEmpty } */
-function readField(id) {
-  const rule = FIELD_RULES[id];
+/** Lee y valida un campo según una regla dada. Devuelve { value, error, isEmpty } */
+function readField(id, rule) {
   const input = document.getElementById(id);
   const raw = input.value.trim();
 
@@ -190,29 +191,109 @@ function paintComputed(id, value, formatter, suffix = "", errorState = false) {
   }
 }
 
-function recalculate() {
-  // --- Leer y validar todos los campos ---
-  const results = {};
-  for (const id of Object.keys(FIELD_RULES)) {
-    results[id] = readField(id);
-    paintField(id, results[id]);
-  }
+/* ---------------------------------------------------------------
+   Muestras de calibración dinámicas (agregar / eliminar)
+--------------------------------------------------------------- */
+let sampleUids = [1];
+let nextSampleUid = 2;
 
-  // --- 1. Calibración de boquilla ---
-  const gasto = { vol1: null, vol2: null, vol3: null };
-  ["vol1", "vol2", "vol3"].forEach((id, i) => {
-    const r = results[id];
-    const value = r.error ? null : r.value * 3;
-    gasto[id] = value;
-    paintComputed(`gasto${i + 1}`, value, nf2, "L/min", !!r.error);
+const sampleFieldId = (uid) => `vol-${uid}`;
+const sampleGastoId = (uid) => `gasto-${uid}`;
+
+function renderCalibRows() {
+  // Guarda los valores ya ingresados antes de reconstruir las filas, para
+  // no perderlos al agregar o eliminar una muestra.
+  const savedValues = {};
+  sampleUids.forEach((uid) => {
+    const input = document.getElementById(sampleFieldId(uid));
+    if (input) savedValues[uid] = input.value;
   });
 
-  const gastoValues = ["vol1", "vol2", "vol3"].map((id) => gasto[id]);
-  const gastoValid = gastoValues.every((v) => v !== null);
+  calibRowsEl.innerHTML = sampleUids
+    .map((uid, index) => {
+      const canRemove = sampleUids.length > 1;
+      return `
+        <div class="calib-row" data-uid="${uid}">
+          <span class="calib-row__label">${index + 1}</span>
+          <div class="field">
+            <input type="number" id="${sampleFieldId(uid)}" step="0.01" min="${SAMPLE_RULE.min}" max="${SAMPLE_RULE.max}" placeholder="Ej: 0,45" required />
+            <span class="field__error" id="err-${sampleFieldId(uid)}"></span>
+          </div>
+          <output class="computed" id="${sampleGastoId(uid)}">–</output>
+          <button
+            type="button"
+            class="remove-sample-btn"
+            data-remove-uid="${uid}"
+            ${canRemove ? "" : "disabled"}
+            aria-label="Eliminar muestra ${index + 1}"
+            title="Eliminar muestra"
+          >
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16"></path>
+              <path d="M9 7V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"></path>
+              <path d="M6.5 7l0.8 12a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9L17.5 7"></path>
+              <path d="M10 11v6M14 11v6"></path>
+            </svg>
+          </button>
+        </div>`;
+    })
+    .join("");
+
+  // Restaura los valores guardados en los inputs recién creados
+  sampleUids.forEach((uid) => {
+    const input = document.getElementById(sampleFieldId(uid));
+    if (input && savedValues[uid] !== undefined) input.value = savedValues[uid];
+  });
+
+  addSampleBtn.hidden = sampleUids.length >= MAX_SAMPLES;
+}
+
+addSampleBtn.addEventListener("click", () => {
+  if (sampleUids.length >= MAX_SAMPLES) return;
+  const newUid = nextSampleUid++;
+  sampleUids.push(newUid);
+  renderCalibRows();
+  recalculate();
+  const newInput = document.getElementById(sampleFieldId(newUid));
+  if (newInput) newInput.focus();
+});
+
+calibRowsEl.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-remove-uid]");
+  if (!btn || btn.disabled || sampleUids.length <= 1) return;
+  const uid = Number(btn.dataset.removeUid);
+  sampleUids = sampleUids.filter((u) => u !== uid);
+  renderCalibRows();
+  recalculate();
+});
+
+renderCalibRows();
+
+function recalculate() {
+  // --- 1. Calibración de boquilla (muestras dinámicas) ---
+  const sampleResults = sampleUids.map((uid) => {
+    const r = readField(sampleFieldId(uid), SAMPLE_RULE);
+    paintField(sampleFieldId(uid), r);
+    return { uid, ...r };
+  });
+
+  const gastoBySample = sampleResults.map((r) => (r.error ? null : r.value * 3));
+  sampleResults.forEach((r, i) => {
+    paintComputed(sampleGastoId(r.uid), gastoBySample[i], nf2, "L/min", !!r.error);
+  });
+
+  const gastoValid = gastoBySample.length > 0 && gastoBySample.every((v) => v !== null);
   const gastoProm = gastoValid
-    ? (gastoValues[0] + gastoValues[1] + gastoValues[2]) / 3
+    ? gastoBySample.reduce((a, b) => a + b, 0) / gastoBySample.length
     : null;
   paintComputed("gastoProm", gastoProm, nf2, "L/min", !gastoValid);
+
+  // --- Leer y validar el resto de los campos ---
+  const results = {};
+  for (const id of Object.keys(FIELD_RULES)) {
+    results[id] = readField(id, FIELD_RULES[id]);
+    paintField(id, results[id]);
+  }
 
   // --- 2. Ancho de boquilla ---
   const anchoOk = !results.anchoBoquilla.error;
@@ -295,24 +376,18 @@ function recalculate() {
   dosisEl.textContent = dosisOk ? nf2.format(dosis) : "Completa los campos requeridos";
 
   // --- Snapshot para el informe PDF ---
-  const anyFieldError = Object.values(results).some((r) => r.error);
+  const anyFieldError = Object.values(results).some((r) => r.error) || sampleResults.some((r) => r.error);
   formIsValid = !anyFieldError && dosisOk;
 
   lastReportState = {
     fileName: `DosisCalc-informe-${pdfFileStamp()}.pdf`,
-    sections: [
-      {
-        title: "1. Calibración de boquilla",
-        rows: [
-          { label: "Muestra 1 — Volumen / 20 s", value: nf2.format(results.vol1.value ?? 0), unit: "L" },
-          { label: "Muestra 1 — Gasto de boquilla", value: gasto.vol1 !== null ? nf2.format(gasto.vol1) : "–", unit: "L/min" },
-          { label: "Muestra 2 — Volumen / 20 s", value: nf2.format(results.vol2.value ?? 0), unit: "L" },
-          { label: "Muestra 2 — Gasto de boquilla", value: gasto.vol2 !== null ? nf2.format(gasto.vol2) : "–", unit: "L/min" },
-          { label: "Muestra 3 — Volumen / 20 s", value: nf2.format(results.vol3.value ?? 0), unit: "L" },
-          { label: "Muestra 3 — Gasto de boquilla", value: gasto.vol3 !== null ? nf2.format(gasto.vol3) : "–", unit: "L/min" },
-          { label: "Gasto de boquilla promedio", value: gastoProm !== null ? nf2.format(gastoProm) : "–", unit: "L/min" },
-        ],
-      },
+    samples: sampleResults.map((r, i) => ({
+      label: `Muestra ${i + 1}`,
+      volume: r.error ? "–" : nf2.format(r.value),
+      gasto: gastoBySample[i] !== null ? nf2.format(gastoBySample[i]) : "–",
+    })),
+    gastoPromedio: { value: gastoProm !== null ? nf2.format(gastoProm) : "–", unit: "L/min" },
+    rightColumnSections: [
       {
         title: "2. Ancho de boquilla",
         rows: [{ label: "Ancho de boquilla", value: nf2.format(ancho ?? 0), unit: "m" }],
@@ -336,6 +411,8 @@ function recalculate() {
         title: "6. Área de ensayo",
         rows: [{ label: "Área de ensayo", value: nf2.format(area ?? 0), unit: "m²" }],
       },
+    ],
+    bottomSections: [
       {
         title: "7. Caldo",
         rows: [

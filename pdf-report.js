@@ -3,11 +3,18 @@
  * Usa jsPDF (vendorizado en vendor/jspdf.umd.min.js, MIT license) para poder
  * generar el PDF sin conexión una vez que la PWA quedó instalada/cacheada.
  *
+ * Layout: los ítems 1-6 se dibujan en dos columnas (izquierda: muestras de
+ * calibración, que pueden ser hasta 20; derecha: ítems 2-6, de largo fijo).
+ * Debajo, a todo el ancho, van los ítems 7-8 y el resultado final.
+ *
  * Expone window.DosisPDF.generate(reportState) donde reportState es:
  * {
- *   sections: [ { title, rows: [{ label, value, unit }] } ],
+ *   fileName: string,
+ *   samples: [{ label, volume, gasto }],
+ *   gastoPromedio: { value, unit },
+ *   rightColumnSections: [ { title, rows: [{ label, value, unit }] } ],
+ *   bottomSections: [ { title, rows: [{ label, value, unit }] } ],
  *   finalResult: { label, value, unit },
- *   fileName: string
  * }
  */
 (function () {
@@ -26,7 +33,11 @@
     marginX: 18,
     marginTop: 20,
     marginBottom: 18,
+    columnGap: 8,
   };
+
+  const ROW_H = 6.3; // alto de fila estándar (secciones 2-8)
+  const SAMPLE_ROW_H = 5.6; // alto de fila compacta para muestras (pueden ser hasta 20)
 
   function formatTimestamp(date) {
     const pad = (n) => String(n).padStart(2, "0");
@@ -90,76 +101,152 @@
     doc.text(`Página ${current} de ${pageCount}`, pageWidth - marginX, y, { align: "right" });
   }
 
-  function ensureSpace(doc, y, needed, pageWidth, pageHeight) {
-    if (y + needed > pageHeight - PAGE.marginBottom) {
-      doc.addPage();
-      return drawHeader(doc, pageWidth);
-    }
-    return y;
-  }
-
-  function drawSectionTitle(doc, y, title, pageWidth) {
-    const { marginX } = PAGE;
+  /** Título de sub-sección dentro de una columna de ancho `width` en x. */
+  function drawSectionTitle(doc, x, y, title, width) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
+    doc.setFontSize(10);
     doc.setTextColor(...BRAND.ink);
-    doc.text(title, marginX, y);
+    doc.text(title, x, y);
 
     doc.setDrawColor(...BRAND.accent);
     doc.setLineWidth(0.6);
-    doc.line(marginX, y + 1.6, marginX + 14, y + 1.6);
+    doc.line(x, y + 1.5, x + 12, y + 1.5);
 
-    return y + 7;
+    return y + 6.5;
   }
 
-  function drawRow(doc, y, row, index, pageWidth) {
-    const { marginX } = PAGE;
-    const contentWidth = pageWidth - marginX * 2;
-    const rowHeight = 6.3;
-
+  /** Fila estándar "label ... valor" dentro de una columna de ancho `width` en x. */
+  function drawRow(doc, x, y, row, index, width) {
     if (index % 2 === 0) {
       doc.setFillColor(...BRAND.accentLight);
-      doc.rect(marginX, y - 4.1, contentWidth, rowHeight, "F");
+      doc.rect(x, y - 4.1, width, ROW_H, "F");
     }
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.3);
+    doc.setFontSize(9);
     doc.setTextColor(...BRAND.ink);
-    doc.text(row.label, marginX + 2.5, y);
+    doc.text(row.label, x + 2.5, y);
 
     const valueText = row.unit ? `${row.value} ${row.unit}` : row.value;
     doc.setFont("courier", "bold");
-    doc.setFontSize(9.3);
+    doc.setFontSize(9);
     doc.setTextColor(...BRAND.accent);
-    doc.text(valueText, pageWidth - marginX - 2.5, y, { align: "right" });
+    doc.text(valueText, x + width - 2.5, y, { align: "right" });
 
-    return y + rowHeight;
+    return y + ROW_H;
   }
 
-  function drawFinalResult(doc, y, finalResult, pageWidth) {
-    const { marginX } = PAGE;
-    const boxWidth = pageWidth - marginX * 2;
-    const boxHeight = 24;
+  /** Fila compacta de una muestra: "Mn   0,45 L   1,35 L/min" en una sola línea. */
+  function drawSampleRow(doc, x, y, index, sample, width) {
+    if (index % 2 === 0) {
+      doc.setFillColor(...BRAND.accentLight);
+      doc.rect(x, y - 3.9, width, SAMPLE_ROW_H, "F");
+    }
 
-    doc.setFillColor(...BRAND.ink);
-    doc.roundedRect(marginX, y, boxWidth, boxHeight, 3, 3, "F");
+    const volX = x + width * 0.56;
+    const gastoX = x + width - 2.5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.2);
+    doc.setTextColor(...BRAND.ink);
+    doc.text(sample.label, x + 2.5, y);
+
+    doc.setFont("courier", "normal");
+    doc.setFontSize(8.2);
+    doc.setTextColor(...BRAND.ink);
+    doc.text(`${sample.volume} L`, volX, y, { align: "right" });
+
+    doc.setFont("courier", "bold");
+    doc.setFontSize(8.2);
+    doc.setTextColor(...BRAND.accent);
+    doc.text(`${sample.gasto} L/min`, gastoX, y, { align: "right" });
+
+    return y + SAMPLE_ROW_H;
+  }
+
+  /** Columna izquierda: título + muestras + fila de promedio (con énfasis sutil). */
+  function drawSamplesColumn(doc, x, y, reportState, width) {
+    let cy = drawSectionTitle(doc, x, y, "1. Calibración de boquilla", width);
+
+    reportState.samples.forEach((sample, i) => {
+      cy = drawSampleRow(doc, x, cy, i, sample, width);
+    });
+
+    // Espacio + regla superior sutil antes del promedio, para diferenciarlo
+    // de las muestras individuales sin usar un bloque de color fuerte.
+    cy += 3;
+    doc.setDrawColor(...BRAND.accent);
+    doc.setLineWidth(0.5);
+    doc.line(x, cy - 3.6, x + width, cy - 3.6);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...BRAND.ink);
+    doc.text("Gasto de boquilla promedio", x + 2.5, cy);
+
+    doc.setFont("courier", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...BRAND.accent);
+    doc.text(`${reportState.gastoPromedio.value} ${reportState.gastoPromedio.unit}`, x + width - 2.5, cy, {
+      align: "right",
+    });
+
+    return cy + ROW_H;
+  }
+
+  /** Columna derecha: ítems 2 a 6, cada uno con su título y filas. */
+  function drawRightColumn(doc, x, y, sections, width) {
+    let cy = y;
+    sections.forEach((section) => {
+      cy = drawSectionTitle(doc, x, cy, section.title, width);
+      section.rows.forEach((row, i) => {
+        cy = drawRow(doc, x, cy, row, i, width);
+      });
+      cy += 2.5;
+    });
+    return cy;
+  }
+
+  /** Secciones a todo el ancho (ítems 7 y 8). */
+  function drawFullWidthSections(doc, x, y, sections, width) {
+    let cy = y;
+    sections.forEach((section) => {
+      cy = drawSectionTitle(doc, x, cy, section.title, width);
+      section.rows.forEach((row, i) => {
+        cy = drawRow(doc, x, cy, row, i, width);
+      });
+      cy += 2.5;
+    });
+    return cy;
+  }
+
+  /** Resultado final: línea superior de énfasis, igual criterio que el
+   *  promedio de gasto de boquilla (sin recuadro ni fondo sombreado). */
+  function drawFinalResult(doc, x, y, finalResult, width) {
+    doc.setDrawColor(...BRAND.accent);
+    doc.setLineWidth(0.6);
+    doc.line(x, y, x + width, y);
+
+    let cy = y + 7;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.setTextColor(217, 168, 108);
-    doc.text(finalResult.label.toUpperCase(), marginX + boxWidth / 2, y + 7.5, { align: "center" });
+    doc.setTextColor(...BRAND.accent);
+    doc.text(finalResult.label.toUpperCase(), x + width / 2, cy, { align: "center" });
 
+    cy += 9;
     doc.setFont("courier", "bold");
-    doc.setFontSize(19);
-    doc.setTextColor(245, 245, 244);
-    doc.text(finalResult.value, marginX + boxWidth / 2, y + 16.5, { align: "center" });
+    doc.setFontSize(18);
+    doc.setTextColor(...BRAND.ink);
+    doc.text(finalResult.value, x + width / 2, cy, { align: "center" });
 
+    cy += 5;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(217, 168, 108);
-    doc.text(finalResult.unit, marginX + boxWidth / 2, y + 21, { align: "center" });
+    doc.setTextColor(...BRAND.textMuted);
+    doc.text(finalResult.unit, x + width / 2, cy, { align: "center" });
 
-    return y + boxHeight + 6;
+    return cy + 4;
   }
 
   function generate(reportState) {
@@ -170,21 +257,36 @@
     const doc = new jsPDF({ unit: "mm", format: PAGE.format, compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
+    const { marginX, columnGap } = PAGE;
 
-    let y = drawHeader(doc, pageWidth);
+    const contentWidth = pageWidth - marginX * 2;
+    const colWidth = (contentWidth - columnGap) / 2;
+    const leftX = marginX;
+    const rightX = marginX + colWidth + columnGap;
 
-    reportState.sections.forEach((section) => {
-      y = ensureSpace(doc, y, 10 + section.rows.length * 6.3, pageWidth, pageHeight);
-      y = drawSectionTitle(doc, y, section.title, pageWidth);
-      section.rows.forEach((row, i) => {
-        y = ensureSpace(doc, y, 6.3, pageWidth, pageHeight);
-        y = drawRow(doc, y, row, i, pageWidth);
-      });
-      y += 2.5;
-    });
+    let y0 = drawHeader(doc, pageWidth);
 
-    y = ensureSpace(doc, y, 30, pageWidth, pageHeight);
-    drawFinalResult(doc, y, reportState.finalResult, pageWidth);
+    // Columnas: 1 (izquierda, muestras) y 2-6 (derecha)
+    const yLeftEnd = drawSamplesColumn(doc, leftX, y0, reportState, colWidth);
+    const yRightEnd = drawRightColumn(doc, rightX, y0, reportState.rightColumnSections, colWidth);
+
+    let y = Math.max(yLeftEnd, yRightEnd) + 4;
+
+    // Salvaguarda: si por algún motivo el contenido no cupiera en una sola
+    // página (caso extremo), se continúa en una página nueva en vez de
+    // dibujar fuera del área visible.
+    const estimatedBottomHeight =
+      reportState.bottomSections.reduce((sum, s) => sum + 6.5 + s.rows.length * ROW_H + 2.5, 0) + 28;
+    if (y + estimatedBottomHeight > pageHeight - PAGE.marginBottom) {
+      doc.addPage();
+      y = drawHeader(doc, pageWidth);
+    }
+
+    // Ítems 7-8 a todo el ancho
+    y = drawFullWidthSections(doc, marginX, y, reportState.bottomSections, contentWidth);
+
+    // Resultado final
+    drawFinalResult(doc, marginX, y, reportState.finalResult, contentWidth);
 
     const totalPages = doc.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
