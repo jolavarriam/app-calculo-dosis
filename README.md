@@ -1,11 +1,13 @@
 # DosisCalc
 
-Una PWA (Progressive Web App) hecha con HTML + CSS + JavaScript puro,
-instalable en Android e iOS, sin backend ni base de datos. Calcula la dosis
-de aplicación (calibración de boquilla, mojamiento, caldo y dosis final) con
-recálculo instantáneo, validación de errores en cada campo, tema claro/oscuro
-con memoria, y generación de un informe en PDF — todo funcionando sin
-conexión una vez instalada.
+Una PWA (Progressive Web App) con Vanilla JavaScript y 
+un diseño elegante claro/oscuro, compatible con navegadores web e 
+instalable en Android e iOS con funcionamiento 100% offline. 
+Es un formulario de cálculo que permite estimar la dosis de aplicación 
+(calibración de boquilla, mojamiento, caldo y dosis final), 
+con recálculo y validaciones instantáneas.
+Finalmente permite generar un informe en PDF en tamaño carta
+con los datos ingresados y calculados.
 
 ## Estructura del proyecto
 
@@ -17,8 +19,7 @@ conexión una vez instalada.
 ├── manifest.json           # Web App Manifest (nombre, iconos, colores)
 ├── service-worker.js       # Cache offline (app shell + jsPDF + fuentes)
 ├── vendor/
-│   ├── jspdf.umd.min.js    # jsPDF vendorizado (ver "Librería de PDF" abajo)
-│   └── jspdf.LICENSE.txt   # Licencia MIT de jsPDF
+│   ├── jspdf.umd.min.js    # jsPDF vendorizado "Librería de PDF"
 └── icons/
     ├── icon-192.png
     ├── icon-512.png
@@ -27,7 +28,7 @@ conexión una vez instalada.
 
 ## Cálculo de dosis (resumen del modelo)
 
-La calculadora replica, paso a paso, el modelo del Excel original:
+El formulario permite en un paso a paso el cálculo de dosis de aplicación:
 
 1. **Calibración de boquilla** — se ingresa el volumen recolectado (L) en 20
    segundos por cada muestra (hasta 20 muestras); cada una se convierte a
@@ -50,49 +51,8 @@ formulario.
 
 ## Librería de PDF: jsPDF
 
-Se usa [jsPDF](https://github.com/parallax/jsPDF) (MIT license) para generar
-el informe. Se eligió porque:
-
-- Es pura JavaScript, sin dependencias, y tiene un build UMD de un solo
-  archivo fácil de auto-alojar (`vendor/jspdf.umd.min.js`) — no depende de un
-  CDN, lo cual es clave para que funcione **sin conexión**.
-- Su API de dibujo (texto, rectángulos, líneas) es suficiente para un reporte
-  tabulado con buen control de diseño, sin necesitar plugins extra como
-  `jspdf-autotable` (el reporte dibuja las "tablas" a mano en `pdf-report.js`,
-  lo que también evita pesar más el bundle offline).
-- Alternativas como `pdf-lib` también son excelentes y MIT, pero su API es de
-  más bajo nivel para este caso de uso (formulario → reporte con texto).
-
-El archivo `vendor/jspdf.umd.min.js` (~410 KB) queda cacheado por el
-`service-worker.js` la primera vez que se abre la app con conexión. Desde ahí
-en adelante, el botón **"Generar PDF"** funciona incluso sin internet — se
-probó explícitamente simulando el dispositivo offline.
-
-El informe se genera en tamaño carta, con las muestras de calibración e
-ítems 2-6 en dos columnas, e ítems 7-8 y el resultado final a todo el ancho
-debajo. Si el contenido no cupiera en una sola página (por ejemplo, con
-muchas muestras), continúa automáticamente en una página nueva.
-
-## Cómo subirlo a tu repositorio de GitHub
-
-Dentro de la carpeta de tu repositorio local:
-
-```bash
-git add .
-git commit -m "DosisCalc"
-git push origin main
-```
-
-## Cómo publicarlo gratis con GitHub Pages
-
-1. Ve a tu repositorio en GitHub → **Settings** → **Pages**.
-2. En "Build and deployment" → **Source**, selecciona **Deploy from a branch**.
-3. Elige la rama `main` y la carpeta `/ (root)`.
-4. Guarda. En un par de minutos tu sitio estará disponible en:
-   `https://<tu-usuario>.github.io/<nombre-del-repo>/`
-
-⚠️ **Importante:** las PWA requieren **HTTPS** para funcionar (registrar el
-service worker e instalar la app). GitHub Pages ya sirve todo por HTTPS.
+Para la generación de PDF se usa [jsPDF](https://github.com/parallax/jsPDF) (MIT license) para generar
+el informe.citamente simulando el dispositivo offline.
 
 ## Cómo instalarla en el celular
 
@@ -112,21 +72,8 @@ service worker e instalar la app). GitHub Pages ya sirve todo por HTTPS.
    **"Guardar en Archivos"**. Es un paso más que en Android, pero el archivo
    final es el mismo PDF.
 
-## Tema claro/oscuro
-
-El botón ☀/☾ en la esquina superior cambia entre el tema claro ("alta
-gama") y oscuro ("midnight minimal"). La elección se guarda en
-`localStorage` del navegador/dispositivo y se recuerda en la próxima visita.
-Si nunca se elige manualmente, la app sigue el tema del sistema operativo,
-incluso en vivo si el sistema cambia de tema mientras la app está abierta.
-
 ## Notas
 
-- No hay build tools: es HTML/CSS/JS plano. Para probar el Service Worker,
-  el tema o el botón de PDF necesitas servirlo por HTTP(S) (por ejemplo
-  `npx serve`, la extensión "Live Server" de VS Code, o subiéndolo a GitHub
-  Pages) — abrir `index.html` como archivo local (`file://`) no activa el
-  Service Worker.
 - Los rangos de validación de cada campo son referenciales (para detectar
   valores fuera de lo razonable o mal ingresados), no límites normativos.
 - Cada vez que cambies archivos cacheados, sube el número de versión de
