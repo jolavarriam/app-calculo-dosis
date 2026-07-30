@@ -122,9 +122,19 @@ const FIELD_RULES = {
 
 const form = document.getElementById("calcForm");
 
+// Snapshot del último cálculo válido, usado por el botón "Generar PDF"
+let lastReportState = null;
+let formIsValid = false;
+
 const nf2 = new Intl.NumberFormat("es-CL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const nf1 = new Intl.NumberFormat("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat("es-CL", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+function pdfFileStamp() {
+  const pad = (n) => String(n).padStart(2, "0");
+  const d = new Date();
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
 
 /** Lee y valida un campo. Devuelve { value, error, isEmpty } */
 function readField(id) {
@@ -283,6 +293,69 @@ function recalculate() {
   const dosisEl = document.getElementById("dosisResultado");
   dosisEl.classList.toggle("has-error", !dosisOk);
   dosisEl.textContent = dosisOk ? nf2.format(dosis) : "Completa los campos requeridos";
+
+  // --- Snapshot para el informe PDF ---
+  const anyFieldError = Object.values(results).some((r) => r.error);
+  formIsValid = !anyFieldError && dosisOk;
+
+  lastReportState = {
+    fileName: `DosisCalc-informe-${pdfFileStamp()}.pdf`,
+    sections: [
+      {
+        title: "1. Calibración de boquilla",
+        rows: [
+          { label: "Muestra 1 — Volumen / 20 s", value: nf2.format(results.vol1.value ?? 0), unit: "L" },
+          { label: "Muestra 1 — Gasto de boquilla", value: gasto.vol1 !== null ? nf2.format(gasto.vol1) : "–", unit: "L/min" },
+          { label: "Muestra 2 — Volumen / 20 s", value: nf2.format(results.vol2.value ?? 0), unit: "L" },
+          { label: "Muestra 2 — Gasto de boquilla", value: gasto.vol2 !== null ? nf2.format(gasto.vol2) : "–", unit: "L/min" },
+          { label: "Muestra 3 — Volumen / 20 s", value: nf2.format(results.vol3.value ?? 0), unit: "L" },
+          { label: "Muestra 3 — Gasto de boquilla", value: gasto.vol3 !== null ? nf2.format(gasto.vol3) : "–", unit: "L/min" },
+          { label: "Gasto de boquilla promedio", value: gastoProm !== null ? nf2.format(gastoProm) : "–", unit: "L/min" },
+        ],
+      },
+      {
+        title: "2. Ancho de boquilla",
+        rows: [{ label: "Ancho de boquilla", value: nf2.format(ancho ?? 0), unit: "m" }],
+      },
+      {
+        title: "3. Velocidad de avance",
+        rows: [
+          { label: "Avance", value: nf2.format(avanceMs ?? 0), unit: "m/s" },
+          { label: "Avance", value: avanceMmin !== null ? nf1.format(avanceMmin) : "–", unit: "m/min" },
+        ],
+      },
+      {
+        title: "4. Cobertura",
+        rows: [{ label: "Superficie cubierta", value: m2min !== null ? nf2.format(m2min) : "–", unit: "m²/min" }],
+      },
+      {
+        title: "5. Mojamiento",
+        rows: [{ label: "Mojamiento", value: mojamiento !== null ? nf0.format(mojamiento) : "–", unit: "L/ha" }],
+      },
+      {
+        title: "6. Área de ensayo",
+        rows: [{ label: "Área de ensayo", value: nf2.format(area ?? 0), unit: "m²" }],
+      },
+      {
+        title: "7. Caldo",
+        rows: [
+          { label: "Caldo necesario (calculado)", value: caldoCalc !== null ? nf2.format(caldoCalc) : "–", unit: "L" },
+          { label: "Remanente mochila", value: nf2.format(remanente), unit: "L" },
+          { label: "Caldo total (calculado)", value: caldoTotal !== null ? nf2.format(caldoTotal) : "–", unit: "L" },
+          { label: "Caldo a preparar (ingresado)", value: caldoEfectivo !== null ? nf2.format(caldoEfectivo) : "–", unit: "L" },
+        ],
+      },
+      {
+        title: "8. Dosis",
+        rows: [{ label: "Producto por hectárea", value: nf2.format(producto ?? 0), unit: "kg o L/ha" }],
+      },
+    ],
+    finalResult: {
+      label: "Dosis por carga de caldo",
+      value: dosisOk ? nf2.format(dosis) : "–",
+      unit: "g (o mL) por carga",
+    },
+  };
 }
 
 // Recalcular al instante con cada tecla / cambio
@@ -291,3 +364,53 @@ form.addEventListener("submit", (e) => e.preventDefault());
 
 // Primer cálculo al cargar (por si el navegador restaura valores del formulario)
 recalculate();
+
+/* ---------------------------------------------------------------
+   Botón "Generar PDF"
+--------------------------------------------------------------- */
+const pdfBtn = document.getElementById("pdfBtn");
+const pdfMessage = document.getElementById("pdfMessage");
+
+function showPdfMessage(text, isError) {
+  pdfMessage.textContent = text;
+  pdfMessage.classList.toggle("is-error", !!isError);
+  pdfMessage.classList.toggle("is-success", !isError);
+}
+
+pdfBtn.addEventListener("click", () => {
+  if (!formIsValid || !lastReportState) {
+    showPdfMessage(
+      "Completa correctamente todos los campos requeridos antes de generar el PDF.",
+      true
+    );
+    // Llevar al usuario al primer campo con error
+    const firstInvalid = form.querySelector(".is-invalid, input:invalid");
+    if (firstInvalid) {
+      firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstInvalid.focus({ preventScroll: true });
+    }
+    return;
+  }
+
+  if (!window.DosisPDF) {
+    showPdfMessage(
+      "El generador de PDF aún no está listo. Si es la primera vez que usas la app, revisa tu conexión e inténtalo de nuevo.",
+      true
+    );
+    return;
+  }
+
+  try {
+    pdfBtn.disabled = true;
+    window.DosisPDF.generate(lastReportState);
+    showPdfMessage("PDF generado. Revisa tu carpeta de descargas.", false);
+  } catch (err) {
+    console.error("Error al generar el PDF:", err);
+    showPdfMessage(
+      "No se pudo generar el PDF. Si es la primera vez que usas la app, revisa tu conexión e inténtalo de nuevo.",
+      true
+    );
+  } finally {
+    pdfBtn.disabled = false;
+  }
+});

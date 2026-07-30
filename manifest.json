@@ -1,7 +1,7 @@
 {
-  "name": "Cálculo de Dosis de Aplicación",
-  "short_name": "Dosis App",
-  "description": "Calculadora de dosis de aplicación: calibración de boquilla, mojamiento y caldo",
+  "name": "DosisCalc",
+  "short_name": "DosisCalc",
+  "description": "DosisCalc — calculadora de dosis de aplicación: calibración de boquilla, mojamiento, caldo e informe en PDF",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
