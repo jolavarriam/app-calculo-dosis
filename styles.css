@@ -499,7 +499,7 @@ body {
 
 .calib-grid__head {
   display: grid;
-  grid-template-columns: 2.1rem 1fr 1fr 2.7rem;
+  grid-template-columns: 2.1rem 1fr 1fr;
   gap: var(--space-2);
   font-size: 0.7rem;
   font-weight: 600;
@@ -517,7 +517,7 @@ body {
 
 .calib-row {
   display: grid;
-  grid-template-columns: 2.1rem 1fr 1fr 2.7rem;
+  grid-template-columns: 2.1rem 1fr 1fr;
   gap: var(--space-2);
   align-items: start;
 }
@@ -597,48 +597,148 @@ body {
 }
 
 /* ==========================================================
-   Resultado final
+   Tratamientos: bloques dinámicos (agregar / eliminar
+   tratamientos y productos)
    ========================================================== */
-.final-result {
-  margin-top: 1.5rem;
-  padding: 1.5rem;
-  background: linear-gradient(165deg, var(--contrast-bg), color-mix(in srgb, var(--contrast-bg) 88%, black));
-  border: 1px solid color-mix(in srgb, var(--contrast-accent) 25%, transparent);
+.treatment-block {
+  border: 1px solid var(--line);
   border-radius: 12px;
-  text-align: center;
-  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--contrast-accent) 35%, transparent);
-  transition: background-color 0.3s ease;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-.final-result__label {
-  font-size: 0.76rem;
+.treatment-block:last-child {
+  margin-bottom: var(--space-3);
+}
+
+.treatment-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.treatment-block__header h3 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.remove-treatment-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.remove-treatment-btn .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
+}
+
+.remove-treatment-btn:hover:not(:disabled) {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, var(--line));
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.remove-treatment-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.products-head {
+  display: grid;
+  grid-template-columns: 1.8rem 1fr 1fr 5.5rem 2.7rem;
+  gap: var(--space-2);
+  font-size: 0.66rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--contrast-accent);
-  margin-bottom: 0.55rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  padding: 0 var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
-.final-result__value {
-  display: block;
+.products-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.product-row {
+  display: grid;
+  grid-template-columns: 1.8rem 1fr 1fr 5.5rem 2.7rem;
+  gap: var(--space-2);
+  align-items: start;
+}
+
+.product-row__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.7rem;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 2.5rem;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-  color: var(--contrast-text);
-}
-
-.final-result__value.has-error {
-  font-size: 1.02rem;
-  color: color-mix(in srgb, var(--error) 70%, var(--contrast-text));
-}
-
-.final-result__unit {
-  margin-top: 0.4rem;
   font-size: 0.8rem;
-  color: var(--contrast-accent);
-  opacity: 0.8;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.add-product-btn {
+  margin-bottom: var(--space-3);
+}
+
+.treatment-block__remanente {
+  max-width: 260px;
+}
+
+@media (max-width: 640px) {
+  .products-head {
+    display: none;
+  }
+
+  .product-row {
+    grid-template-columns: 1fr;
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: var(--space-3);
+    padding-right: 3.2rem;
+  }
+
+  .product-row__label {
+    display: none;
+  }
+
+  .product-row .remove-sample-btn {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .product-row output.computed {
+    text-align: left;
+  }
 }
 
 .disclaimer {

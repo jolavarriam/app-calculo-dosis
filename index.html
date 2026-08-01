@@ -110,21 +110,39 @@
           </span>
           Calibración de boquilla
         </h2>
-        <p class="hint">Recolecta el caudal de la boquilla durante 20 segundos. Agrega tantas muestras como quieras repetir para promediar.</p>
+        <p class="hint">Recolecta el caudal de la boquilla durante 20 segundos, en 3 muestras. El promedio se calcula automáticamente.</p>
 
         <div class="calib-grid">
           <div class="calib-grid__head">
-            <span aria-hidden="true"></span><span>Volumen (L) / 20 s</span><span>Gasto (L/min)</span><span aria-hidden="true"></span>
+            <span aria-hidden="true"></span><span>Volumen (L) / 20 s</span><span>Gasto (L/min)</span>
           </div>
-          <div class="calib-rows" id="calibRows"><!-- filas generadas por JS --></div>
+          <div class="calib-rows">
+            <div class="calib-row">
+              <span class="calib-row__label">1</span>
+              <div class="field">
+                <input type="number" id="vol-1" step="0.01" min="0.01" max="10" placeholder="Ej: 0,45" required />
+                <span class="field__error" id="err-vol-1"></span>
+              </div>
+              <output class="computed" id="gasto-1">–</output>
+            </div>
+            <div class="calib-row">
+              <span class="calib-row__label">2</span>
+              <div class="field">
+                <input type="number" id="vol-2" step="0.01" min="0.01" max="10" placeholder="Ej: 0,45" required />
+                <span class="field__error" id="err-vol-2"></span>
+              </div>
+              <output class="computed" id="gasto-2">–</output>
+            </div>
+            <div class="calib-row">
+              <span class="calib-row__label">3</span>
+              <div class="field">
+                <input type="number" id="vol-3" step="0.01" min="0.01" max="10" placeholder="Ej: 0,45" required />
+                <span class="field__error" id="err-vol-3"></span>
+              </div>
+              <output class="computed" id="gasto-3">–</output>
+            </div>
+          </div>
         </div>
-
-        <button id="addSampleBtn" type="button" class="add-sample-btn">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14M5 12h14"></path>
-          </svg>
-          Agregar muestra
-        </button>
 
         <div class="result-line result-line--total">
           <span>Gasto de boquilla promedio</span>
@@ -275,7 +293,7 @@
         </div>
       </section>
 
-      <!-- 8. Dosis -->
+      <!-- 8. Tratamientos -->
       <section class="card card--final" data-step="8">
         <h2>
           <span class="tick">
@@ -285,21 +303,22 @@
               <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"></circle>
             </svg>
           </span>
-          Dosis
+          Tratamientos
         </h2>
-        <p class="hint">Cantidad de producto a incorporar en cada carga de caldo.</p>
+        <p class="hint">
+          Agrega uno o más tratamientos. Cada tratamiento puede tener hasta 3 productos: ingresa
+          el nombre y la dosis (kg o L por hectárea) de cada uno para calcular su dosis por carga
+          de caldo. El remanente de cada tratamiento se usa solo para el informe.
+        </p>
 
-        <div class="field field--solo">
-          <label for="productoHa">Producto (kg o L) por hectárea</label>
-          <input type="number" id="productoHa" name="productoHa" step="0.01" min="0.001" max="1000" placeholder="Ej: 1,5" required />
-          <span class="field__error" id="err-productoHa"></span>
-        </div>
+        <div id="treatmentsContainer"><!-- tratamientos generados por JS --></div>
 
-        <div class="final-result">
-          <div class="final-result__label">Dosis por carga de caldo</div>
-          <output class="final-result__value" id="dosisResultado">–</output>
-          <div class="final-result__unit">g (o mL) por carga</div>
-        </div>
+        <button id="addTreatmentBtn" type="button" class="add-sample-btn">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"></path>
+          </svg>
+          Agregar tratamiento
+        </button>
       </section>
 
       <p class="disclaimer">

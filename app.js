@@ -95,14 +95,16 @@ window.addEventListener("appinstalled", () => {
 /* ---------------------------------------------------------------
    Calculadora de dosis de aplicación
    Replica el modelo del Excel "Calculo_Dosis_app":
-     1. Calibración de boquilla   -> gasto de boquilla (L/min)
+     1. Calibración de boquilla (3 muestras fijas) -> gasto (L/min)
      2. Ancho de boquilla (m)
      3. Avance (m/s -> m/min)
      4. Cobertura (m²/min)
      5. Mojamiento (L/ha)
      6. Área de ensayo (m²)
      7. Caldo (L) + remanente mochila
-     8. Dosis (g o mL por carga de caldo)
+     8. Tratamientos: 1 o más, cada uno con hasta 3 productos
+        (nombre + dosis kg o L/ha -> dosis por carga calculada) y un
+        remanente propio (solo para el informe)
 --------------------------------------------------------------- */
 
 // Reglas de validación por campo. Los rangos son referenciales (para
@@ -114,15 +116,19 @@ const FIELD_RULES = {
   areaEnsayo: { required: true, min: 1, max: 100000, label: "Área de ensayo (m²)" },
   remanente: { required: false, min: 0, max: 200, default: 0.8, label: "Remanente mochila (L)" },
   caldoPreparar: { required: true, min: 0.01, max: 100000, label: "Caldo a preparar (L)" },
-  productoHa: { required: true, min: 0.001, max: 1000, label: "Producto por hectárea" },
 };
 
+// La calibración de boquilla siempre usa 3 muestras fijas.
 const SAMPLE_RULE = { required: true, min: 0.01, max: 10 };
-const MAX_SAMPLES = 20;
+const SAMPLE_IDS = ["vol-1", "vol-2", "vol-3"];
+
+// Tratamientos: 1 o más (máx. 30), cada uno con 1 a 3 productos.
+const PRODUCT_DOSIS_RULE = { required: true, min: 0.001, max: 1000, label: "Dosis (kg o L/ha)" };
+const TREATMENT_REMANENTE_RULE = { required: true, min: 0, max: 200, label: "Remanente (L)" };
+const MAX_PRODUCTS_PER_TREATMENT = 3;
+const MAX_TREATMENTS = 30;
 
 const form = document.getElementById("calcForm");
-const calibRowsEl = document.getElementById("calibRows");
-const addSampleBtn = document.getElementById("addSampleBtn");
 
 // Snapshot del último cálculo válido, usado por el botón "Generar PDF"
 let lastReportState = null;
@@ -138,9 +144,10 @@ function pdfFileStamp() {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 }
 
-/** Lee y valida un campo según una regla dada. Devuelve { value, error, isEmpty } */
+/** Lee y valida un campo numérico según una regla dada. Devuelve { value, error, isEmpty } */
 function readField(id, rule) {
   const input = document.getElementById(id);
+  if (!input) return { value: null, error: null, isEmpty: true };
   const raw = input.value.trim();
 
   if (raw === "") {
@@ -165,10 +172,26 @@ function readField(id, rule) {
   return { value: num, error: null, isEmpty: false };
 }
 
+/** Lee y valida un campo de texto (p.ej. nombre de producto). */
+function readTextField(id, { required }) {
+  const input = document.getElementById(id);
+  if (!input) return { value: null, error: null, isEmpty: true };
+  const raw = input.value.trim();
+
+  if (raw === "") {
+    if (required) {
+      return { value: null, error: "Este campo es obligatorio.", isEmpty: true };
+    }
+    return { value: null, error: null, isEmpty: true };
+  }
+  return { value: raw, error: null, isEmpty: false };
+}
+
 /** Pinta el estado (válido / inválido / mensaje) de un input */
 function paintField(id, result) {
   const input = document.getElementById(id);
   const errorEl = document.getElementById(`err-${id}`);
+  if (!input || !errorEl) return;
   input.classList.remove("is-invalid", "is-valid");
 
   if (result.error) {
@@ -183,6 +206,7 @@ function paintField(id, result) {
 /** Escribe un valor calculado en un <output>, o "–" si no se puede calcular */
 function paintComputed(id, value, formatter, suffix = "", errorState = false) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.classList.toggle("has-error", errorState);
   if (value === null || value === undefined || errorState) {
     el.textContent = "–" + (suffix ? ` ${suffix}` : "");
@@ -192,97 +216,257 @@ function paintComputed(id, value, formatter, suffix = "", errorState = false) {
 }
 
 /* ---------------------------------------------------------------
-   Muestras de calibración dinámicas (agregar / eliminar)
+   Tratamientos dinámicos (agregar / eliminar tratamientos y productos)
 --------------------------------------------------------------- */
-let sampleUids = [1];
-let nextSampleUid = 2;
+let treatments = [{ uid: 1, products: [{ uid: 1 }] }];
+let nextTreatmentUid = 2;
+let nextProductUid = 2;
 
-const sampleFieldId = (uid) => `vol-${uid}`;
-const sampleGastoId = (uid) => `gasto-${uid}`;
+const treatmentsContainer = document.getElementById("treatmentsContainer");
+const addTreatmentBtn = document.getElementById("addTreatmentBtn");
 
-function renderCalibRows() {
-  // Guarda los valores ya ingresados antes de reconstruir las filas, para
-  // no perderlos al agregar o eliminar una muestra.
-  const savedValues = {};
-  sampleUids.forEach((uid) => {
-    const input = document.getElementById(sampleFieldId(uid));
-    if (input) savedValues[uid] = input.value;
+const treatRemanenteId = (tuid) => `remanenteTrat-t${tuid}`;
+const prodNameId = (tuid, puid) => `prodName-t${tuid}-p${puid}`;
+const prodDosisId = (tuid, puid) => `prodDosis-t${tuid}-p${puid}`;
+const prodResultId = (tuid, puid) => `prodResult-t${tuid}-p${puid}`;
+
+const removeIconSvg = `
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16"></path>
+      <path d="M9 7V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"></path>
+      <path d="M6.5 7l0.8 12a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9L17.5 7"></path>
+      <path d="M10 11v6M14 11v6"></path>
+    </svg>`;
+
+function renderTreatments() {
+  // Guarda los valores ya ingresados antes de reconstruir el HTML, para no
+  // perderlos al agregar/eliminar un tratamiento o un producto.
+  const saved = {};
+  treatments.forEach((t) => {
+    const remInput = document.getElementById(treatRemanenteId(t.uid));
+    if (remInput) saved[treatRemanenteId(t.uid)] = remInput.value;
+    t.products.forEach((p) => {
+      const nameInput = document.getElementById(prodNameId(t.uid, p.uid));
+      const dosisInput = document.getElementById(prodDosisId(t.uid, p.uid));
+      if (nameInput) saved[prodNameId(t.uid, p.uid)] = nameInput.value;
+      if (dosisInput) saved[prodDosisId(t.uid, p.uid)] = dosisInput.value;
+    });
   });
 
-  calibRowsEl.innerHTML = sampleUids
-    .map((uid, index) => {
-      const canRemove = sampleUids.length > 1;
+  treatmentsContainer.innerHTML = treatments
+    .map((t, tIndex) => {
+      const canRemoveTreatment = treatments.length > 1;
+      const canAddProduct = t.products.length < MAX_PRODUCTS_PER_TREATMENT;
+
+      const productsHtml = t.products
+        .map((p, pIndex) => {
+          const canRemoveProduct = t.products.length > 1;
+          return `
+            <div class="product-row" data-tuid="${t.uid}" data-puid="${p.uid}">
+              <span class="product-row__label">${pIndex + 1}</span>
+              <div class="field">
+                <input type="text" id="${prodNameId(t.uid, p.uid)}" placeholder="Ej: Flumioxazin" maxlength="60" required />
+                <span class="field__error" id="err-${prodNameId(t.uid, p.uid)}"></span>
+              </div>
+              <div class="field">
+                <input type="number" id="${prodDosisId(t.uid, p.uid)}" step="0.001" min="${PRODUCT_DOSIS_RULE.min}" max="${PRODUCT_DOSIS_RULE.max}" placeholder="Ej: 0,4" required />
+                <span class="field__error" id="err-${prodDosisId(t.uid, p.uid)}"></span>
+              </div>
+              <output class="computed" id="${prodResultId(t.uid, p.uid)}">–</output>
+              <button
+                type="button"
+                class="remove-sample-btn"
+                data-remove-product-tuid="${t.uid}"
+                data-remove-product-puid="${p.uid}"
+                ${canRemoveProduct ? "" : "disabled"}
+                aria-label="Eliminar producto ${pIndex + 1}"
+                title="Eliminar producto"
+              >${removeIconSvg}</button>
+            </div>`;
+        })
+        .join("");
+
       return `
-        <div class="calib-row" data-uid="${uid}">
-          <span class="calib-row__label">${index + 1}</span>
-          <div class="field">
-            <input type="number" id="${sampleFieldId(uid)}" step="0.01" min="${SAMPLE_RULE.min}" max="${SAMPLE_RULE.max}" placeholder="Ej: 0,45" required />
-            <span class="field__error" id="err-${sampleFieldId(uid)}"></span>
+        <div class="treatment-block" data-tuid="${t.uid}">
+          <div class="treatment-block__header">
+            <h3>Tratamiento ${tIndex + 1}</h3>
+            <button
+              type="button"
+              class="remove-treatment-btn"
+              data-remove-treatment-uid="${t.uid}"
+              ${canRemoveTreatment ? "" : "disabled"}
+              aria-label="Eliminar tratamiento ${tIndex + 1}"
+              title="Eliminar tratamiento"
+            >${removeIconSvg}</button>
           </div>
-          <output class="computed" id="${sampleGastoId(uid)}">–</output>
-          <button
-            type="button"
-            class="remove-sample-btn"
-            data-remove-uid="${uid}"
-            ${canRemove ? "" : "disabled"}
-            aria-label="Eliminar muestra ${index + 1}"
-            title="Eliminar muestra"
-          >
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16"></path>
-              <path d="M9 7V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"></path>
-              <path d="M6.5 7l0.8 12a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9L17.5 7"></path>
-              <path d="M10 11v6M14 11v6"></path>
-            </svg>
+
+          <div class="products-head">
+            <span aria-hidden="true"></span>
+            <span>Producto</span>
+            <span>Dosis (kg o L/ha)</span>
+            <span>Dosis / carga</span>
+            <span aria-hidden="true"></span>
+          </div>
+          <div class="products-rows">${productsHtml}</div>
+
+          <button type="button" class="add-sample-btn add-product-btn" data-add-product-tuid="${t.uid}" ${canAddProduct ? "" : "hidden"}>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            Agregar producto
           </button>
+
+          <div class="field field--solo treatment-block__remanente">
+            <label for="${treatRemanenteId(t.uid)}">Remanente (L)</label>
+            <input type="number" id="${treatRemanenteId(t.uid)}" step="0.01" min="${TREATMENT_REMANENTE_RULE.min}" max="${TREATMENT_REMANENTE_RULE.max}" placeholder="Ej: 0,8" required />
+            <span class="field__error" id="err-${treatRemanenteId(t.uid)}"></span>
+            <span class="field__note">Solo se usa para el informe, no afecta ningún cálculo.</span>
+          </div>
         </div>`;
     })
     .join("");
 
   // Restaura los valores guardados en los inputs recién creados
-  sampleUids.forEach((uid) => {
-    const input = document.getElementById(sampleFieldId(uid));
-    if (input && savedValues[uid] !== undefined) input.value = savedValues[uid];
+  Object.keys(saved).forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.value = saved[id];
   });
 
-  addSampleBtn.hidden = sampleUids.length >= MAX_SAMPLES;
+  addTreatmentBtn.hidden = treatments.length >= MAX_TREATMENTS;
 }
 
-addSampleBtn.addEventListener("click", () => {
-  if (sampleUids.length >= MAX_SAMPLES) return;
-  const newUid = nextSampleUid++;
-  sampleUids.push(newUid);
-  renderCalibRows();
+addTreatmentBtn.addEventListener("click", () => {
+  if (treatments.length >= MAX_TREATMENTS) return;
+  const newUid = nextTreatmentUid++;
+  treatments.push({ uid: newUid, products: [{ uid: nextProductUid++ }] });
+  renderTreatments();
   recalculate();
-  const newInput = document.getElementById(sampleFieldId(newUid));
-  if (newInput) newInput.focus();
+  saveState();
 });
 
-calibRowsEl.addEventListener("click", (event) => {
-  const btn = event.target.closest("[data-remove-uid]");
-  if (!btn || btn.disabled || sampleUids.length <= 1) return;
-  const uid = Number(btn.dataset.removeUid);
-  sampleUids = sampleUids.filter((u) => u !== uid);
-  renderCalibRows();
-  recalculate();
+treatmentsContainer.addEventListener("click", (event) => {
+  const removeTreatmentBtn = event.target.closest("[data-remove-treatment-uid]");
+  if (removeTreatmentBtn) {
+    if (removeTreatmentBtn.disabled || treatments.length <= 1) return;
+    const uid = Number(removeTreatmentBtn.dataset.removeTreatmentUid);
+    treatments = treatments.filter((t) => t.uid !== uid);
+    renderTreatments();
+    recalculate();
+    saveState();
+    return;
+  }
+
+  const addProductBtn = event.target.closest("[data-add-product-tuid]");
+  if (addProductBtn) {
+    const tuid = Number(addProductBtn.dataset.addProductTuid);
+    const treatment = treatments.find((t) => t.uid === tuid);
+    if (treatment && treatment.products.length < MAX_PRODUCTS_PER_TREATMENT) {
+      treatment.products.push({ uid: nextProductUid++ });
+      renderTreatments();
+      recalculate();
+      saveState();
+    }
+    return;
+  }
+
+  const removeProductBtn = event.target.closest("[data-remove-product-tuid]");
+  if (removeProductBtn) {
+    if (removeProductBtn.disabled) return;
+    const tuid = Number(removeProductBtn.dataset.removeProductTuid);
+    const puid = Number(removeProductBtn.dataset.removeProductPuid);
+    const treatment = treatments.find((t) => t.uid === tuid);
+    if (treatment && treatment.products.length > 1) {
+      treatment.products = treatment.products.filter((p) => p.uid !== puid);
+      renderTreatments();
+      recalculate();
+      saveState();
+    }
+  }
 });
 
-renderCalibRows();
+/* ---------------------------------------------------------------
+   Persistencia local (localStorage): recuerda todo lo ingresado en el
+   formulario, incluida la estructura de tratamientos/productos, aunque
+   se cierre la app, se apague el dispositivo o se use offline.
+--------------------------------------------------------------- */
+const STORAGE_KEY = "dosiscalc-form-state-v1";
 
+function saveState() {
+  try {
+    const values = {};
+    form.querySelectorAll("input[id]").forEach((input) => {
+      values[input.id] = input.value;
+    });
+
+    const state = {
+      treatmentsStructure: treatments.map((t) => ({
+        uid: t.uid,
+        products: t.products.map((p) => p.uid),
+      })),
+      nextTreatmentUid,
+      nextProductUid,
+      values,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    /* localStorage no disponible (modo privado, cuota llena, etc.):
+       los datos no se recordarán, pero la calculadora sigue funcionando. */
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function restoreState() {
+  const state = loadState();
+
+  if (state && Array.isArray(state.treatmentsStructure) && state.treatmentsStructure.length > 0) {
+    treatments = state.treatmentsStructure.map((t) => ({
+      uid: t.uid,
+      products: (t.products || []).map((puid) => ({ uid: puid })),
+    }));
+
+    const maxTreatmentUid = treatments.reduce((max, t) => Math.max(max, t.uid), 0);
+    const maxProductUid = treatments.reduce(
+      (max, t) => Math.max(max, ...t.products.map((p) => p.uid), 0),
+      0
+    );
+    nextTreatmentUid = Math.max(state.nextTreatmentUid || 0, maxTreatmentUid + 1);
+    nextProductUid = Math.max(state.nextProductUid || 0, maxProductUid + 1);
+  }
+
+  renderTreatments();
+
+  if (state && state.values) {
+    Object.keys(state.values).forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = state.values[id];
+    });
+  }
+}
+
+/* ---------------------------------------------------------------
+   Cálculo principal
+--------------------------------------------------------------- */
 function recalculate() {
-  // --- 1. Calibración de boquilla (muestras dinámicas) ---
-  const sampleResults = sampleUids.map((uid) => {
-    const r = readField(sampleFieldId(uid), SAMPLE_RULE);
-    paintField(sampleFieldId(uid), r);
-    return { uid, ...r };
+  // --- 1. Calibración de boquilla (3 muestras fijas) ---
+  const sampleResults = SAMPLE_IDS.map((id, index) => {
+    const r = readField(id, SAMPLE_RULE);
+    paintField(id, r);
+    return { index, ...r };
   });
 
   const gastoBySample = sampleResults.map((r) => (r.error ? null : r.value * 3));
   sampleResults.forEach((r, i) => {
-    paintComputed(sampleGastoId(r.uid), gastoBySample[i], nf2, "L/min", !!r.error);
+    paintComputed(`gasto-${i + 1}`, gastoBySample[i], nf2, "L/min", !!r.error);
   });
 
-  const gastoValid = gastoBySample.length > 0 && gastoBySample.every((v) => v !== null);
+  const gastoValid = gastoBySample.every((v) => v !== null);
   const gastoProm = gastoValid
     ? gastoBySample.reduce((a, b) => a + b, 0) / gastoBySample.length
     : null;
@@ -364,20 +548,52 @@ function recalculate() {
     noteEl.classList.remove("is-warning");
   }
 
-  // --- 8. Dosis final ---
-  const productoOk = !results.productoHa.error;
-  const producto = productoOk ? results.productoHa.value : null;
+  // --- 8. Tratamientos (productos y dosis) ---
+  let treatmentsValid = true;
 
-  const dosisOk = productoOk && caldoEfectivoOk && mojamientoOk && mojamiento > 0;
-  const dosis = dosisOk ? (producto * caldoEfectivo * 1000) / mojamiento : null;
+  const treatmentRows = treatments.map((t, tIndex) => {
+    const remResult = readField(treatRemanenteId(t.uid), TREATMENT_REMANENTE_RULE);
+    paintField(treatRemanenteId(t.uid), remResult);
+    if (remResult.error) treatmentsValid = false;
 
-  const dosisEl = document.getElementById("dosisResultado");
-  dosisEl.classList.toggle("has-error", !dosisOk);
-  dosisEl.textContent = dosisOk ? nf2.format(dosis) : "Completa los campos requeridos";
+    const productResults = t.products.map((p) => {
+      const nameResult = readTextField(prodNameId(t.uid, p.uid), { required: true });
+      paintField(prodNameId(t.uid, p.uid), nameResult);
+
+      const dosisResult = readField(prodDosisId(t.uid, p.uid), PRODUCT_DOSIS_RULE);
+      paintField(prodDosisId(t.uid, p.uid), dosisResult);
+
+      if (nameResult.error || dosisResult.error) treatmentsValid = false;
+
+      const productoOk = !dosisResult.error;
+      const producto = productoOk ? dosisResult.value : null;
+      const dosisCargaOk = productoOk && caldoEfectivoOk && mojamientoOk && mojamiento > 0;
+      const dosisCarga = dosisCargaOk ? (producto * caldoEfectivo * 1000) / mojamiento : null;
+
+      paintComputed(prodResultId(t.uid, p.uid), dosisCarga, nf2, "g/mL", !dosisCargaOk);
+
+      return {
+        name: !nameResult.error && !nameResult.isEmpty ? nameResult.value : "–",
+        dosis: !dosisResult.error ? nf2.format(dosisResult.value) : "–",
+        dosisCarga: dosisCargaOk ? nf2.format(dosisCarga) : "–",
+      };
+    });
+
+    return {
+      label: `Tratamiento ${tIndex + 1}`,
+      productos: productResults.map((p) => p.name).join(" + "),
+      dosis: productResults.map((p) => p.dosis).join(" + "),
+      dosisCarga: productResults.map((p) => p.dosisCarga).join(" + "),
+      remanente: !remResult.error && !remResult.isEmpty ? nf2.format(remResult.value) : "–",
+    };
+  });
 
   // --- Snapshot para el informe PDF ---
-  const anyFieldError = Object.values(results).some((r) => r.error) || sampleResults.some((r) => r.error);
-  formIsValid = !anyFieldError && dosisOk;
+  const anyFieldError =
+    Object.values(results).some((r) => r.error) ||
+    sampleResults.some((r) => r.error) ||
+    !treatmentsValid;
+  formIsValid = !anyFieldError;
 
   lastReportState = {
     fileName: `DosisCalc-informe-${pdfFileStamp()}.pdf`,
@@ -387,7 +603,8 @@ function recalculate() {
       gasto: gastoBySample[i] !== null ? nf2.format(gastoBySample[i]) : "–",
     })),
     gastoPromedio: { value: gastoProm !== null ? nf2.format(gastoProm) : "–", unit: "L/min" },
-    rightColumnSections: [
+    // Columna izquierda del PDF: ítems 1 (arriba, dibujado aparte) a 4
+    leftColumnSections: [
       {
         title: "2. Ancho de boquilla",
         rows: [{ label: "Ancho de boquilla", value: nf2.format(ancho ?? 0), unit: "m" }],
@@ -403,6 +620,9 @@ function recalculate() {
         title: "4. Cobertura",
         rows: [{ label: "Superficie cubierta", value: m2min !== null ? nf2.format(m2min) : "–", unit: "m²/min" }],
       },
+    ],
+    // Columna derecha del PDF: ítems 5 a 7
+    rightColumnSections: [
       {
         title: "5. Mojamiento",
         rows: [{ label: "Mojamiento", value: mojamiento !== null ? nf0.format(mojamiento) : "–", unit: "L/ha" }],
@@ -411,8 +631,6 @@ function recalculate() {
         title: "6. Área de ensayo",
         rows: [{ label: "Área de ensayo", value: nf2.format(area ?? 0), unit: "m²" }],
       },
-    ],
-    bottomSections: [
       {
         title: "7. Caldo",
         rows: [
@@ -422,24 +640,22 @@ function recalculate() {
           { label: "Caldo a preparar (ingresado)", value: caldoEfectivo !== null ? nf2.format(caldoEfectivo) : "–", unit: "L" },
         ],
       },
-      {
-        title: "8. Dosis",
-        rows: [{ label: "Producto por hectárea", value: nf2.format(producto ?? 0), unit: "kg o L/ha" }],
-      },
     ],
-    finalResult: {
-      label: "Dosis por carga de caldo",
-      value: dosisOk ? nf2.format(dosis) : "–",
-      unit: "g (o mL) por carga",
-    },
+    // Ítem 8, a todo el ancho: un tratamiento por fila, con productos, dosis
+    // y dosis por carga en notación de suma literal (no calculada).
+    treatments: treatmentRows,
   };
 }
 
-// Recalcular al instante con cada tecla / cambio
-form.addEventListener("input", recalculate);
+// Recalcular y guardar al instante con cada tecla / cambio
+form.addEventListener("input", () => {
+  recalculate();
+  saveState();
+});
 form.addEventListener("submit", (e) => e.preventDefault());
 
-// Primer cálculo al cargar (por si el navegador restaura valores del formulario)
+// Restaura lo guardado (o usa los valores por defecto del HTML) y calcula
+restoreState();
 recalculate();
 
 /* ---------------------------------------------------------------
@@ -460,7 +676,6 @@ pdfBtn.addEventListener("click", () => {
       "Completa correctamente todos los campos requeridos antes de generar el PDF.",
       true
     );
-    // Llevar al usuario al primer campo con error
     const firstInvalid = form.querySelector(".is-invalid, input:invalid");
     if (firstInvalid) {
       firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });

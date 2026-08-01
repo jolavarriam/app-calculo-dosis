@@ -3,18 +3,20 @@
  * Usa jsPDF (vendorizado en vendor/jspdf.umd.min.js, MIT license) para poder
  * generar el PDF sin conexión una vez que la PWA quedó instalada/cacheada.
  *
- * Layout: los ítems 1-6 se dibujan en dos columnas (izquierda: muestras de
- * calibración, que pueden ser hasta 20; derecha: ítems 2-6, de largo fijo).
- * Debajo, a todo el ancho, van los ítems 7-8 y el resultado final.
+ * Layout: arriba, en dos columnas — izquierda: ítem 1 (muestras de
+ * calibración, siempre 3) + ítems 2 a 4; derecha: ítems 5 a 7. Debajo, a todo
+ * el ancho, el ítem 8 (Tratamientos): una fila por tratamiento, con los
+ * nombres de producto, dosis y dosis por carga en notación de suma literal
+ * (no calculada), y el remanente del tratamiento.
  *
  * Expone window.DosisPDF.generate(reportState) donde reportState es:
  * {
  *   fileName: string,
- *   samples: [{ label, volume, gasto }],
+ *   samples: [{ label, volume, gasto }],       // siempre 3 muestras
  *   gastoPromedio: { value, unit },
- *   rightColumnSections: [ { title, rows: [{ label, value, unit }] } ],
- *   bottomSections: [ { title, rows: [{ label, value, unit }] } ],
- *   finalResult: { label, value, unit },
+ *   leftColumnSections: [ { title, rows: [{ label, value, unit }] } ],  // ítems 2-4
+ *   rightColumnSections: [ { title, rows: [{ label, value, unit }] } ], // ítems 5-7
+ *   treatments: [ { label, productos, dosis, dosisCarga, remanente } ], // ítem 8
  * }
  */
 (function () {
@@ -36,8 +38,8 @@
     columnGap: 8,
   };
 
-  const ROW_H = 6.3; // alto de fila estándar (secciones 2-8)
-  const SAMPLE_ROW_H = 5.6; // alto de fila compacta para muestras (pueden ser hasta 20)
+  const ROW_H = 6.3; // alto de fila estándar
+  const SAMPLE_ROW_H = 5.6; // alto de fila compacta para muestras (siempre 3)
 
   function formatTimestamp(date) {
     const pad = (n) => String(n).padStart(2, "0");
@@ -164,8 +166,8 @@
     return y + SAMPLE_ROW_H;
   }
 
-  /** Columna izquierda: título + muestras + fila de promedio (con énfasis sutil). */
-  function drawSamplesColumn(doc, x, y, reportState, width) {
+  /** Columna izquierda: ítem 1 (muestras + promedio) seguido de los ítems 2-4. */
+  function drawLeftColumn(doc, x, y, reportState, width) {
     let cy = drawSectionTitle(doc, x, y, "1. Calibración de boquilla", width);
 
     reportState.samples.forEach((sample, i) => {
@@ -191,11 +193,22 @@
       align: "right",
     });
 
-    return cy + ROW_H;
+    cy += ROW_H + 2.5;
+
+    // Ítems 2 a 4, en la misma columna
+    reportState.leftColumnSections.forEach((section) => {
+      cy = drawSectionTitle(doc, x, cy, section.title, width);
+      section.rows.forEach((row, i) => {
+        cy = drawRow(doc, x, cy, row, i, width);
+      });
+      cy += 2.5;
+    });
+
+    return cy;
   }
 
-  /** Columna derecha: ítems 2 a 6, cada uno con su título y filas. */
-  function drawRightColumn(doc, x, y, sections, width) {
+  /** Columna derecha: ítems 5 a 7, cada uno con su título y filas. */
+  function drawSectionsColumn(doc, x, y, sections, width) {
     let cy = y;
     sections.forEach((section) => {
       cy = drawSectionTitle(doc, x, cy, section.title, width);
@@ -207,46 +220,66 @@
     return cy;
   }
 
-  /** Secciones a todo el ancho (ítems 7 y 8). */
-  function drawFullWidthSections(doc, x, y, sections, width) {
-    let cy = y;
-    sections.forEach((section) => {
-      cy = drawSectionTitle(doc, x, cy, section.title, width);
-      section.rows.forEach((row, i) => {
-        cy = drawRow(doc, x, cy, row, i, width);
-      });
-      cy += 2.5;
+  /** Ítem 8, a todo el ancho: tabla de tratamientos con notación de suma. */
+  function drawTreatmentsTable(doc, x, y, treatments, width) {
+    let cy = drawSectionTitle(doc, x, y, "8. Tratamientos", width);
+
+    const cols = [
+      { key: "label", header: "Tratamiento", w: width * 0.14, align: "left" },
+      { key: "productos", header: "Producto(s)", w: width * 0.32, align: "left" },
+      { key: "dosis", header: "Dosis (kg o L/ha)", w: width * 0.2, align: "right" },
+      { key: "dosisCarga", header: "Dosis por carga", w: width * 0.2, align: "right" },
+      { key: "remanente", header: "Remanente (L)", w: width * 0.14, align: "right" },
+    ];
+
+    let cx = x;
+    const colX = cols.map((c) => {
+      const thisX = cx;
+      cx += c.w;
+      return thisX;
     });
-    return cy;
-  }
 
-  /** Resultado final: línea superior de énfasis, igual criterio que el
-   *  promedio de gasto de boquilla (sin recuadro ni fondo sombreado). */
-  function drawFinalResult(doc, x, y, finalResult, width) {
-    doc.setDrawColor(...BRAND.accent);
-    doc.setLineWidth(0.6);
-    doc.line(x, y, x + width, y);
-
-    let cy = y + 7;
-
+    // Encabezado de la tabla
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...BRAND.accent);
-    doc.text(finalResult.label.toUpperCase(), x + width / 2, cy, { align: "center" });
-
-    cy += 9;
-    doc.setFont("courier", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(...BRAND.ink);
-    doc.text(finalResult.value, x + width / 2, cy, { align: "center" });
-
-    cy += 5;
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...BRAND.textMuted);
-    doc.text(finalResult.unit, x + width / 2, cy, { align: "center" });
+    cols.forEach((c, i) => {
+      const tx = c.align === "right" ? colX[i] + c.w - 2.5 : colX[i] + 2.5;
+      doc.text(c.header, tx, cy, { align: c.align === "right" ? "right" : "left", maxWidth: c.w - 4 });
+    });
+    cy += 2.5;
+    doc.setDrawColor(...BRAND.accent);
+    doc.setLineWidth(0.4);
+    doc.line(x, cy, x + width, cy);
+    cy += 5.5;
 
-    return cy + 4;
+    treatments.forEach((t, i) => {
+      if (i % 2 === 0) {
+        doc.setFillColor(...BRAND.accentLight);
+        doc.rect(x, cy - 4.1, width, ROW_H, "F");
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...BRAND.ink);
+      doc.text(t.label, colX[0] + 2.5, cy, { maxWidth: cols[0].w - 4 });
+
+      doc.setFont("helvetica", "normal");
+      doc.text(t.productos, colX[1] + 2.5, cy, { maxWidth: cols[1].w - 4 });
+
+      doc.setFont("courier", "bold");
+      doc.setTextColor(...BRAND.accent);
+      doc.text(t.dosis, colX[2] + cols[2].w - 2.5, cy, { align: "right", maxWidth: cols[2].w - 4 });
+      doc.text(t.dosisCarga, colX[3] + cols[3].w - 2.5, cy, { align: "right", maxWidth: cols[3].w - 4 });
+
+      doc.setFont("courier", "normal");
+      doc.setTextColor(...BRAND.ink);
+      doc.text(t.remanente, colX[4] + cols[4].w - 2.5, cy, { align: "right" });
+
+      cy += ROW_H;
+    });
+
+    return cy;
   }
 
   function generate(reportState) {
@@ -266,27 +299,23 @@
 
     let y0 = drawHeader(doc, pageWidth);
 
-    // Columnas: 1 (izquierda, muestras) y 2-6 (derecha)
-    const yLeftEnd = drawSamplesColumn(doc, leftX, y0, reportState, colWidth);
-    const yRightEnd = drawRightColumn(doc, rightX, y0, reportState.rightColumnSections, colWidth);
+    // Columnas superiores: izquierda (ítems 1-4) y derecha (ítems 5-7)
+    const yLeftEnd = drawLeftColumn(doc, leftX, y0, reportState, colWidth);
+    const yRightEnd = drawSectionsColumn(doc, rightX, y0, reportState.rightColumnSections, colWidth);
 
     let y = Math.max(yLeftEnd, yRightEnd) + 4;
 
     // Salvaguarda: si por algún motivo el contenido no cupiera en una sola
-    // página (caso extremo), se continúa en una página nueva en vez de
-    // dibujar fuera del área visible.
-    const estimatedBottomHeight =
-      reportState.bottomSections.reduce((sum, s) => sum + 6.5 + s.rows.length * ROW_H + 2.5, 0) + 28;
-    if (y + estimatedBottomHeight > pageHeight - PAGE.marginBottom) {
+    // página (p.ej. muchos tratamientos), se continúa en una página nueva en
+    // vez de dibujar fuera del área visible.
+    const estimatedTableHeight = 12 + reportState.treatments.length * ROW_H + 6;
+    if (y + estimatedTableHeight > pageHeight - PAGE.marginBottom) {
       doc.addPage();
       y = drawHeader(doc, pageWidth);
     }
 
-    // Ítems 7-8 a todo el ancho
-    y = drawFullWidthSections(doc, marginX, y, reportState.bottomSections, contentWidth);
-
-    // Resultado final
-    drawFinalResult(doc, marginX, y, reportState.finalResult, contentWidth);
+    // Ítem 8, a todo el ancho
+    drawTreatmentsTable(doc, marginX, y, reportState.treatments, contentWidth);
 
     const totalPages = doc.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
