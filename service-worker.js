@@ -1,4 +1,4 @@
-const CACHE_NAME = "dosis-app-cache-v1.7";
+const CACHE_NAME = "dosis-app-cache-v1.9";
 
 // Archivos que se guardarán en caché para que la app funcione offline
 const FILES_TO_CACHE = [

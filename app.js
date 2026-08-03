@@ -138,6 +138,19 @@ const nf2 = new Intl.NumberFormat("es-CL", { minimumFractionDigits: 2, maximumFr
 const nf1 = new Intl.NumberFormat("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat("es-CL", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+/**
+ * Recorta los ceros sobrantes a la derecha de la coma decimal, solo para el
+ * texto que se muestra en el PDF (ej. "220,00" -> "220", "22,10" -> "22,1").
+ * La calculadora en pantalla sigue mostrando siempre 2 (o 1) decimales.
+ */
+function pdfTrim(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(/(\d+),(\d+)/g, (match, intPart, decPart) => {
+    const trimmed = decPart.replace(/0+$/, "");
+    return trimmed ? `${intPart},${trimmed}` : intPart;
+  });
+}
+
 function pdfFileStamp() {
   const pad = (n) => String(n).padStart(2, "0");
   const d = new Date();
@@ -316,9 +329,8 @@ function renderTreatments() {
 
           <div class="field field--solo treatment-block__remanente">
             <label for="${treatRemanenteId(t.uid)}">Remanente (L)</label>
-            <input type="number" id="${treatRemanenteId(t.uid)}" step="0.01" min="${TREATMENT_REMANENTE_RULE.min}" max="${TREATMENT_REMANENTE_RULE.max}" placeholder="Ej: 0,8" required />
+            <input type="number" id="${treatRemanenteId(t.uid)}" step="0.01" min="${TREATMENT_REMANENTE_RULE.min}" max="${TREATMENT_REMANENTE_RULE.max}" value="0" required />
             <span class="field__error" id="err-${treatRemanenteId(t.uid)}"></span>
-            <span class="field__note">Solo se usa para el informe, no afecta ningún cálculo.</span>
           </div>
         </div>`;
     })
@@ -451,6 +463,116 @@ function restoreState() {
 }
 
 /* ---------------------------------------------------------------
+   Diálogo de confirmación (reutilizable para todos los botones
+   "Limpiar sección" / "Limpiar todo")
+--------------------------------------------------------------- */
+const confirmOverlay = document.getElementById("confirmDialogOverlay");
+const confirmTitleEl = document.getElementById("confirmDialogTitle");
+const confirmMessageEl = document.getElementById("confirmDialogMessage");
+const confirmCancelBtn = document.getElementById("confirmDialogCancel");
+const confirmConfirmBtn = document.getElementById("confirmDialogConfirm");
+const confirmCloseBtn = document.getElementById("confirmDialogClose");
+
+let pendingConfirmAction = null;
+let confirmCloseTimer = null;
+
+function openConfirmDialog({ title = "Confirmar limpieza", message, onConfirm }) {
+  clearTimeout(confirmCloseTimer);
+  confirmTitleEl.textContent = title;
+  confirmMessageEl.textContent = message;
+  pendingConfirmAction = onConfirm;
+  confirmOverlay.hidden = false;
+  // Deja pintar el estado "hidden -> visible" antes de animar la entrada
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => confirmOverlay.classList.add("is-open"));
+  });
+  confirmConfirmBtn.focus();
+}
+
+function closeConfirmDialog() {
+  confirmOverlay.classList.remove("is-open");
+  pendingConfirmAction = null;
+  confirmCloseTimer = setTimeout(() => {
+    confirmOverlay.hidden = true;
+  }, 180);
+}
+
+confirmCancelBtn.addEventListener("click", closeConfirmDialog);
+confirmCloseBtn.addEventListener("click", closeConfirmDialog);
+confirmOverlay.addEventListener("click", (event) => {
+  if (event.target === confirmOverlay) closeConfirmDialog();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !confirmOverlay.hidden) closeConfirmDialog();
+});
+confirmConfirmBtn.addEventListener("click", () => {
+  const action = pendingConfirmAction;
+  closeConfirmDialog();
+  if (action) action();
+});
+
+/* ---------------------------------------------------------------
+   Botones "Limpiar sección" / "Limpiar todo"
+--------------------------------------------------------------- */
+const CLEAR_SCOPE_FIELD_IDS = {
+  calibracion: ["vol-1", "vol-2", "vol-3", "anchoBoquilla", "avanceMs"],
+  preparacion: ["areaEnsayo", "remanente", "caldoPreparar"],
+};
+
+const CLEAR_SCOPE_MESSAGES = {
+  calibracion: "¿Limpiar los campos de calibración de boquilla, ancho y velocidad?",
+  preparacion: "¿Limpiar los campos de área de ensayo y caldo?",
+  tratamientos: "¿Eliminar todos los tratamientos y productos ingresados?",
+  todo: "¿Limpiar todo el formulario? Se perderán todos los valores ingresados.",
+};
+
+function clearFieldsByIds(ids) {
+  ids.forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = id === "remanente" ? "0.8" : "";
+    input.classList.remove("is-valid", "is-invalid");
+    const errorEl = document.getElementById(`err-${id}`);
+    if (errorEl) errorEl.textContent = "";
+  });
+}
+
+function resetTreatments() {
+  treatments = [{ uid: 1, products: [{ uid: 1 }] }];
+  nextTreatmentUid = 2;
+  nextProductUid = 2;
+  // Vacía el contenedor antes de reconstruir: así renderTreatments() no
+  // encuentra inputs previos con los mismos ids (p.ej. remanenteTrat-t1) y
+  // no arrastra sus valores antiguos al tratamiento recién reseteado.
+  treatmentsContainer.innerHTML = "";
+  renderTreatments();
+}
+
+function clearScope(scope) {
+  if (scope === "tratamientos") {
+    resetTreatments();
+  } else if (scope === "todo") {
+    clearFieldsByIds(CLEAR_SCOPE_FIELD_IDS.calibracion);
+    clearFieldsByIds(CLEAR_SCOPE_FIELD_IDS.preparacion);
+    resetTreatments();
+  } else if (CLEAR_SCOPE_FIELD_IDS[scope]) {
+    clearFieldsByIds(CLEAR_SCOPE_FIELD_IDS[scope]);
+  }
+  recalculate();
+  saveState();
+}
+
+document.querySelectorAll("[data-clear-scope]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const scope = btn.dataset.clearScope;
+    openConfirmDialog({
+      message: CLEAR_SCOPE_MESSAGES[scope] || "¿Limpiar estos campos?",
+      onConfirm: () => clearScope(scope),
+    });
+  });
+});
+
+/* ---------------------------------------------------------------
    Cálculo principal
 --------------------------------------------------------------- */
 function recalculate() {
@@ -580,7 +702,7 @@ function recalculate() {
     });
 
     return {
-      label: `Tratamiento ${tIndex + 1}`,
+      label: String(tIndex + 1),
       productos: productResults.map((p) => p.name).join(" + "),
       dosis: productResults.map((p) => p.dosis).join(" + "),
       dosisCarga: productResults.map((p) => p.dosisCarga).join(" + "),
@@ -599,51 +721,54 @@ function recalculate() {
     fileName: `DosisCalc-informe-${pdfFileStamp()}.pdf`,
     samples: sampleResults.map((r, i) => ({
       label: `Muestra ${i + 1}`,
-      volume: r.error ? "–" : nf2.format(r.value),
-      gasto: gastoBySample[i] !== null ? nf2.format(gastoBySample[i]) : "–",
+      volume: r.error ? "–" : pdfTrim(nf2.format(r.value)),
+      gasto: gastoBySample[i] !== null ? pdfTrim(nf2.format(gastoBySample[i])) : "–",
     })),
-    gastoPromedio: { value: gastoProm !== null ? nf2.format(gastoProm) : "–", unit: "L/min" },
-    // Columna izquierda del PDF: ítems 1 (arriba, dibujado aparte) a 4
+    gastoPromedio: { value: gastoProm !== null ? pdfTrim(nf2.format(gastoProm)) : "–", unit: "L/min" },
+    // Columna izquierda del PDF: ítem 1 (muestras, dibujado aparte) + ítem 2
     leftColumnSections: [
       {
         title: "2. Ancho de boquilla",
-        rows: [{ label: "Ancho de boquilla", value: nf2.format(ancho ?? 0), unit: "m" }],
-      },
-      {
-        title: "3. Velocidad de avance",
-        rows: [
-          { label: "Avance", value: nf2.format(avanceMs ?? 0), unit: "m/s" },
-          { label: "Avance", value: avanceMmin !== null ? nf1.format(avanceMmin) : "–", unit: "m/min" },
-        ],
-      },
-      {
-        title: "4. Cobertura",
-        rows: [{ label: "Superficie cubierta", value: m2min !== null ? nf2.format(m2min) : "–", unit: "m²/min" }],
+        rows: [{ label: "Ancho de boquilla", value: pdfTrim(nf2.format(ancho ?? 0)), unit: "m" }],
       },
     ],
-    // Columna derecha del PDF: ítems 5 a 7
+    // Columna derecha del PDF: ítems 3 (Velocidad, dibujado aparte), 4 y 5
     rightColumnSections: [
       {
-        title: "5. Mojamiento",
-        rows: [{ label: "Mojamiento", value: mojamiento !== null ? nf0.format(mojamiento) : "–", unit: "L/ha" }],
+        title: "4. Área de ensayo",
+        rows: [{ label: "Área de ensayo", value: pdfTrim(nf2.format(area ?? 0)), unit: "m²" }],
       },
       {
-        title: "6. Área de ensayo",
-        rows: [{ label: "Área de ensayo", value: nf2.format(area ?? 0), unit: "m²" }],
-      },
-      {
-        title: "7. Caldo",
+        title: "5. Caldo",
         rows: [
-          { label: "Caldo necesario (calculado)", value: caldoCalc !== null ? nf2.format(caldoCalc) : "–", unit: "L" },
-          { label: "Remanente mochila", value: nf2.format(remanente), unit: "L" },
-          { label: "Caldo total (calculado)", value: caldoTotal !== null ? nf2.format(caldoTotal) : "–", unit: "L" },
-          { label: "Caldo a preparar (ingresado)", value: caldoEfectivo !== null ? nf2.format(caldoEfectivo) : "–", unit: "L" },
+          { label: "Caldo necesario", value: caldoCalc !== null ? pdfTrim(nf2.format(caldoCalc)) : "–", unit: "L" },
+          { label: "Remanente mochila", value: pdfTrim(nf2.format(remanente)), unit: "L" },
+          { label: "Caldo total", value: caldoTotal !== null ? pdfTrim(nf2.format(caldoTotal)) : "–", unit: "L" },
+          { label: "Caldo a preparar", value: caldoEfectivo !== null ? pdfTrim(nf2.format(caldoEfectivo)) : "–", unit: "L" },
         ],
       },
     ],
-    // Ítem 8, a todo el ancho: un tratamiento por fila, con productos, dosis
+    // Ítem 3 (Velocidad): avance (ingresado + calculado, en una sola fila
+    // como las muestras), seguido de cobertura y mojamiento. Se dibuja al
+    // inicio de la columna derecha del PDF.
+    velocidad: {
+      title: "3. Velocidad",
+      avance: {
+        label: "Avance",
+        msValue: avanceOk ? `${pdfTrim(nf2.format(avanceMs))} m/s` : "–",
+        mminValue: avanceMmin !== null ? `${pdfTrim(nf1.format(avanceMmin))} m/min` : "–",
+      },
+      cobertura: { label: "Cobertura", value: m2min !== null ? pdfTrim(nf2.format(m2min)) : "–", unit: "m²/min" },
+      mojamiento: { label: "Mojamiento", value: mojamiento !== null ? pdfTrim(nf0.format(mojamiento)) : "–", unit: "L/ha" },
+    },
+    // Ítem 6, a todo el ancho: un tratamiento por fila, con productos, dosis
     // y dosis por carga en notación de suma literal (no calculada).
-    treatments: treatmentRows,
+    treatments: treatmentRows.map((t) => ({
+      ...t,
+      dosis: pdfTrim(t.dosis),
+      dosisCarga: pdfTrim(t.dosisCarga),
+      remanente: pdfTrim(t.remanente),
+    })),
   };
 }
 
@@ -670,7 +795,7 @@ function showPdfMessage(text, isError) {
   pdfMessage.classList.toggle("is-success", !isError);
 }
 
-pdfBtn.addEventListener("click", () => {
+pdfBtn.addEventListener("click", async () => {
   if (!formIsValid || !lastReportState) {
     showPdfMessage(
       "Completa correctamente todos los campos requeridos antes de generar el PDF.",
@@ -694,7 +819,7 @@ pdfBtn.addEventListener("click", () => {
 
   try {
     pdfBtn.disabled = true;
-    window.DosisPDF.generate(lastReportState);
+    await window.DosisPDF.generate(lastReportState);
     showPdfMessage("PDF generado. Revisa tu carpeta de descargas.", false);
   } catch (err) {
     console.error("Error al generar el PDF:", err);

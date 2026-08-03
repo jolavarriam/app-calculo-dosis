@@ -4,19 +4,28 @@
  * generar el PDF sin conexión una vez que la PWA quedó instalada/cacheada.
  *
  * Layout: arriba, en dos columnas — izquierda: ítem 1 (muestras de
- * calibración, siempre 3) + ítems 2 a 4; derecha: ítems 5 a 7. Debajo, a todo
- * el ancho, el ítem 8 (Tratamientos): una fila por tratamiento, con los
- * nombres de producto, dosis y dosis por carga en notación de suma literal
- * (no calculada), y el remanente del tratamiento.
+ * calibración, siempre 3) + ítem 2 (ancho de boquilla); derecha: ítem 3
+ * (Velocidad: avance, cobertura y mojamiento), ítem 4 (área de ensayo) e
+ * ítem 5 (caldo). Debajo, a todo el ancho, el ítem 6 (Tratamientos): una
+ * fila por tratamiento, con los nombres de producto, dosis y dosis por
+ * carga en notación de suma literal (no calculada), y el remanente del
+ * tratamiento. Cada título de sección lleva una línea vertical a un costado
+ * que recorre todo el contenido de esa sección (en vez de un subrayado).
  *
- * Expone window.DosisPDF.generate(reportState) donde reportState es:
+ * Expone window.DosisPDF.generate(reportState), que devuelve una Promise
+ * (necesita cargar el logo de la app antes de dibujar el encabezado).
+ * reportState:
  * {
  *   fileName: string,
  *   samples: [{ label, volume, gasto }],       // siempre 3 muestras
  *   gastoPromedio: { value, unit },
- *   leftColumnSections: [ { title, rows: [{ label, value, unit }] } ],  // ítems 2-4
- *   rightColumnSections: [ { title, rows: [{ label, value, unit }] } ], // ítems 5-7
- *   treatments: [ { label, productos, dosis, dosisCarga, remanente } ], // ítem 8
+ *   leftColumnSections: [ { title, rows: [{ label, value, unit }] } ],   // ítem 2
+ *   rightColumnSections: [ { title, rows: [{ label, value, unit }] } ],  // ítems 4-5
+ *   velocidad: {                                                        // ítem 3
+ *     title, avance: { label, msValue, mminValue },
+ *     cobertura: { label, value, unit }, mojamiento: { label, value, unit },
+ *   },
+ *   treatments: [ { label, productos, dosis, dosisCarga, remanente } ], // ítem 6
  * }
  */
 (function () {
@@ -39,7 +48,10 @@
   };
 
   const ROW_H = 6.3; // alto de fila estándar
-  const SAMPLE_ROW_H = 5.6; // alto de fila compacta para muestras (siempre 3)
+  const SAMPLE_ROW_H = 5.8; // alto de fila compacta (muestras y avance)
+  const SECTION_GAP = 4; // espacio regular entre secciones
+  const ROW_FONT_SIZE = 9; // tamaño uniforme para el texto de todas las filas
+  const LOGO_PATH = "icons/icon-192.png";
 
   function formatTimestamp(date) {
     const pad = (n) => String(n).padStart(2, "0");
@@ -48,16 +60,45 @@
     return `${fecha} · ${hora}`;
   }
 
-  function drawHeader(doc, pageWidth) {
-    const { marginX, marginTop } = PAGE;
+  /** Intenta cargar el ícono de la app como data URL para incrustarlo en el PDF. */
+  async function loadLogoDataUrl() {
+    try {
+      const response = await fetch(LOGO_PATH);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      return null;
+    }
+  }
 
-    // Isotipo "DC"
+  /** Isotipo de respaldo ("DC") si el logo no se pudo cargar (p.ej. sin caché offline). */
+  function drawFallbackMark(doc, marginX, marginTop) {
     doc.setFillColor(...BRAND.ink);
     doc.roundedRect(marginX, marginTop - 6, 10, 10, 2, 2, "F");
     doc.setTextColor(217, 168, 108);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.text("DC", marginX + 5, marginTop - 0.3, { align: "center" });
+  }
+
+  function drawHeader(doc, pageWidth, logoDataUrl) {
+    const { marginX, marginTop } = PAGE;
+
+    if (logoDataUrl) {
+      try {
+        doc.addImage(logoDataUrl, "PNG", marginX, marginTop - 6, 10, 10, undefined, "FAST");
+      } catch (e) {
+        drawFallbackMark(doc, marginX, marginTop);
+      }
+    } else {
+      drawFallbackMark(doc, marginX, marginTop);
+    }
 
     // Nombre de marca
     doc.setTextColor(...BRAND.ink);
@@ -103,21 +144,37 @@
     doc.text(`Página ${current} de ${pageCount}`, pageWidth - marginX, y, { align: "right" });
   }
 
-  /** Título de sub-sección dentro de una columna de ancho `width` en x. */
-  function drawSectionTitle(doc, x, y, title, width) {
+  /** Línea vertical al costado de una sección, a lo largo de todo su contenido. */
+  function drawVerticalRule(doc, x, yTop, yBottom) {
+    if (yBottom <= yTop) return;
+    doc.setDrawColor(...BRAND.accent);
+    doc.setLineWidth(0.7);
+    doc.line(x, yTop, x, yBottom);
+  }
+
+  /**
+   * Dibuja el título de una sección y, mediante `bodyFn`, su contenido.
+   * Al terminar, traza la línea vertical lateral que reemplaza el antiguo
+   * subrayado horizontal, cubriendo desde el título hasta la última fila.
+   * `bodyFn` recibe el y disponible para la primera fila y debe devolver el
+   * y final (sin el espacio extra entre secciones).
+   */
+  function drawSection(doc, x, y, title, bodyFn) {
+    const topY = y - 4.2;
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(...BRAND.ink);
     doc.text(title, x, y);
 
-    doc.setDrawColor(...BRAND.accent);
-    doc.setLineWidth(0.6);
-    doc.line(x, y + 1.5, x + 12, y + 1.5);
+    const endY = bodyFn(y + 6.5);
 
-    return y + 6.5;
+    drawVerticalRule(doc, x - 2.6, topY, endY - 3.4);
+
+    return endY;
   }
 
-  /** Fila estándar "label ... valor" dentro de una columna de ancho `width` en x. */
+  /** Fila estándar "etiqueta ... valor (unidad)" dentro de una columna. */
   function drawRow(doc, x, y, row, index, width) {
     if (index % 2 === 0) {
       doc.setFillColor(...BRAND.accentLight);
@@ -125,164 +182,201 @@
     }
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(ROW_FONT_SIZE);
     doc.setTextColor(...BRAND.ink);
     doc.text(row.label, x + 2.5, y);
 
     const valueText = row.unit ? `${row.value} ${row.unit}` : row.value;
     doc.setFont("courier", "bold");
-    doc.setFontSize(9);
+    doc.setFontSize(ROW_FONT_SIZE);
     doc.setTextColor(...BRAND.accent);
     doc.text(valueText, x + width - 2.5, y, { align: "right" });
 
     return y + ROW_H;
   }
 
-  /** Fila compacta de una muestra: "Mn   0,45 L   1,35 L/min" en una sola línea. */
-  function drawSampleRow(doc, x, y, index, sample, width) {
+  /** Fila compacta con dos valores en una sola línea (muestras, avance). */
+  function drawInlineRow(doc, x, y, index, label, midValue, rightValue, width) {
     if (index % 2 === 0) {
       doc.setFillColor(...BRAND.accentLight);
-      doc.rect(x, y - 3.9, width, SAMPLE_ROW_H, "F");
+      doc.rect(x, y - 4.1, width, SAMPLE_ROW_H, "F");
     }
 
-    const volX = x + width * 0.56;
-    const gastoX = x + width - 2.5;
+    const midX = x + width * 0.56;
+    const rightX = x + width - 2.5;
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.2);
+    doc.setFontSize(ROW_FONT_SIZE);
     doc.setTextColor(...BRAND.ink);
-    doc.text(sample.label, x + 2.5, y);
+    doc.text(label, x + 2.5, y);
 
     doc.setFont("courier", "normal");
-    doc.setFontSize(8.2);
+    doc.setFontSize(ROW_FONT_SIZE);
     doc.setTextColor(...BRAND.ink);
-    doc.text(`${sample.volume} L`, volX, y, { align: "right" });
+    doc.text(midValue, midX, y, { align: "right" });
 
     doc.setFont("courier", "bold");
-    doc.setFontSize(8.2);
+    doc.setFontSize(ROW_FONT_SIZE);
     doc.setTextColor(...BRAND.accent);
-    doc.text(`${sample.gasto} L/min`, gastoX, y, { align: "right" });
+    doc.text(rightValue, rightX, y, { align: "right" });
 
     return y + SAMPLE_ROW_H;
   }
 
-  /** Columna izquierda: ítem 1 (muestras + promedio) seguido de los ítems 2-4. */
+  /** Columna izquierda: ítem 1 (muestras + promedio) seguido del ítem 2. */
   function drawLeftColumn(doc, x, y, reportState, width) {
-    let cy = drawSectionTitle(doc, x, y, "1. Calibración de boquilla", width);
-
-    reportState.samples.forEach((sample, i) => {
-      cy = drawSampleRow(doc, x, cy, i, sample, width);
-    });
-
-    // Espacio + regla superior sutil antes del promedio, para diferenciarlo
-    // de las muestras individuales sin usar un bloque de color fuerte.
-    cy += 3;
-    doc.setDrawColor(...BRAND.accent);
-    doc.setLineWidth(0.5);
-    doc.line(x, cy - 3.6, x + width, cy - 3.6);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...BRAND.ink);
-    doc.text("Gasto de boquilla promedio", x + 2.5, cy);
-
-    doc.setFont("courier", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(...BRAND.accent);
-    doc.text(`${reportState.gastoPromedio.value} ${reportState.gastoPromedio.unit}`, x + width - 2.5, cy, {
-      align: "right",
-    });
-
-    cy += ROW_H + 2.5;
-
-    // Ítems 2 a 4, en la misma columna
-    reportState.leftColumnSections.forEach((section) => {
-      cy = drawSectionTitle(doc, x, cy, section.title, width);
-      section.rows.forEach((row, i) => {
-        cy = drawRow(doc, x, cy, row, i, width);
+    let cy = drawSection(doc, x, y, "1. Calibración de boquilla", (rowY) => {
+      let ry = rowY;
+      reportState.samples.forEach((sample, i) => {
+        ry = drawInlineRow(doc, x, ry, i, sample.label, `${sample.volume} L`, `${sample.gasto} L/min`, width);
       });
-      cy += 2.5;
-    });
 
-    return cy;
-  }
-
-  /** Columna derecha: ítems 5 a 7, cada uno con su título y filas. */
-  function drawSectionsColumn(doc, x, y, sections, width) {
-    let cy = y;
-    sections.forEach((section) => {
-      cy = drawSectionTitle(doc, x, cy, section.title, width);
-      section.rows.forEach((row, i) => {
-        cy = drawRow(doc, x, cy, row, i, width);
-      });
-      cy += 2.5;
-    });
-    return cy;
-  }
-
-  /** Ítem 8, a todo el ancho: tabla de tratamientos con notación de suma. */
-  function drawTreatmentsTable(doc, x, y, treatments, width) {
-    let cy = drawSectionTitle(doc, x, y, "8. Tratamientos", width);
-
-    const cols = [
-      { key: "label", header: "Tratamiento", w: width * 0.14, align: "left" },
-      { key: "productos", header: "Producto(s)", w: width * 0.32, align: "left" },
-      { key: "dosis", header: "Dosis (kg o L/ha)", w: width * 0.2, align: "right" },
-      { key: "dosisCarga", header: "Dosis por carga", w: width * 0.2, align: "right" },
-      { key: "remanente", header: "Remanente (L)", w: width * 0.14, align: "right" },
-    ];
-
-    let cx = x;
-    const colX = cols.map((c) => {
-      const thisX = cx;
-      cx += c.w;
-      return thisX;
-    });
-
-    // Encabezado de la tabla
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...BRAND.textMuted);
-    cols.forEach((c, i) => {
-      const tx = c.align === "right" ? colX[i] + c.w - 2.5 : colX[i] + 2.5;
-      doc.text(c.header, tx, cy, { align: c.align === "right" ? "right" : "left", maxWidth: c.w - 4 });
-    });
-    cy += 2.5;
-    doc.setDrawColor(...BRAND.accent);
-    doc.setLineWidth(0.4);
-    doc.line(x, cy, x + width, cy);
-    cy += 5.5;
-
-    treatments.forEach((t, i) => {
-      if (i % 2 === 0) {
-        doc.setFillColor(...BRAND.accentLight);
-        doc.rect(x, cy - 4.1, width, ROW_H, "F");
-      }
+      // Espacio + regla superior sutil antes del promedio, para diferenciarlo
+      // de las muestras individuales sin usar un bloque de color fuerte.
+      ry += 3;
+      doc.setDrawColor(...BRAND.accent);
+      doc.setLineWidth(0.5);
+      doc.line(x, ry - 3.6, x + width, ry - 3.6);
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
+      doc.setFontSize(ROW_FONT_SIZE);
       doc.setTextColor(...BRAND.ink);
-      doc.text(t.label, colX[0] + 2.5, cy, { maxWidth: cols[0].w - 4 });
-
-      doc.setFont("helvetica", "normal");
-      doc.text(t.productos, colX[1] + 2.5, cy, { maxWidth: cols[1].w - 4 });
+      doc.text("Gasto de boquilla promedio", x + 2.5, ry);
 
       doc.setFont("courier", "bold");
+      doc.setFontSize(ROW_FONT_SIZE);
       doc.setTextColor(...BRAND.accent);
-      doc.text(t.dosis, colX[2] + cols[2].w - 2.5, cy, { align: "right", maxWidth: cols[2].w - 4 });
-      doc.text(t.dosisCarga, colX[3] + cols[3].w - 2.5, cy, { align: "right", maxWidth: cols[3].w - 4 });
+      doc.text(`${reportState.gastoPromedio.value} ${reportState.gastoPromedio.unit}`, x + width - 2.5, ry, {
+        align: "right",
+      });
 
-      doc.setFont("courier", "normal");
-      doc.setTextColor(...BRAND.ink);
-      doc.text(t.remanente, colX[4] + cols[4].w - 2.5, cy, { align: "right" });
+      return ry + ROW_H;
+    });
 
-      cy += ROW_H;
+    cy += SECTION_GAP;
+
+    // Ítem 2, en la misma columna
+    reportState.leftColumnSections.forEach((section) => {
+      cy = drawSection(doc, x, cy, section.title, (rowY) => {
+        let ry = rowY;
+        section.rows.forEach((row, i) => {
+          ry = drawRow(doc, x, ry, row, i, width);
+        });
+        return ry;
+      });
+      cy += SECTION_GAP;
     });
 
     return cy;
   }
 
-  function generate(reportState) {
+  /** Ítem 3 (Velocidad): avance (ingresado + calculado), cobertura y mojamiento. */
+  function drawVelocidadSection(doc, x, y, velocidad, width) {
+    let cy = drawSection(doc, x, y, velocidad.title, (rowY) => {
+      let ry = drawInlineRow(
+        doc,
+        x,
+        rowY,
+        0,
+        velocidad.avance.label,
+        velocidad.avance.msValue,
+        velocidad.avance.mminValue,
+        width
+      );
+      ry = drawRow(doc, x, ry, velocidad.cobertura, 1, width);
+      ry = drawRow(doc, x, ry, velocidad.mojamiento, 2, width);
+      return ry;
+    });
+
+    return cy + SECTION_GAP;
+  }
+
+  /** Columna derecha: ítem 3 (Velocidad) seguido de los ítems 4 y 5. */
+  function drawRightColumn(doc, x, y, reportState, width) {
+    let cy = drawVelocidadSection(doc, x, y, reportState.velocidad, width);
+
+    reportState.rightColumnSections.forEach((section) => {
+      cy = drawSection(doc, x, cy, section.title, (rowY) => {
+        let ry = rowY;
+        section.rows.forEach((row, i) => {
+          ry = drawRow(doc, x, ry, row, i, width);
+        });
+        return ry;
+      });
+      cy += SECTION_GAP;
+    });
+
+    return cy;
+  }
+
+  /** Ítem 6, a todo el ancho: tabla de tratamientos con notación de suma. */
+  function drawTreatmentsTable(doc, x, y, treatments, width) {
+    return drawSection(doc, x, y, "6. Tratamientos", (rowY) => {
+      let cy = rowY;
+
+      // La primera columna solo lleva el número de tratamiento (sin
+      // encabezado "Tratamiento") para dejar más espacio a nombre y dosis.
+      const cols = [
+        { key: "label", header: "", w: width * 0.06, align: "center" },
+        { key: "productos", header: "Producto(s)", w: width * 0.29, align: "left" },
+        { key: "dosis", header: "Dosis (kg o L/ha)", w: width * 0.25, align: "right" },
+        { key: "dosisCarga", header: "Dosis por carga (g o mL)", w: width * 0.25, align: "right" },
+        { key: "remanente", header: "Remanente (L)", w: width * 0.15, align: "right" },
+      ];
+
+      let cx = x;
+      const colX = cols.map((c) => {
+        const thisX = cx;
+        cx += c.w;
+        return thisX;
+      });
+
+      // Encabezado de la tabla
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(...BRAND.textMuted);
+      cols.forEach((c, i) => {
+        if (!c.header) return;
+        const tx = c.align === "right" ? colX[i] + c.w - 2.5 : colX[i] + 2.5;
+        doc.text(c.header, tx, cy, { align: c.align === "right" ? "right" : "left", maxWidth: c.w - 4 });
+      });
+      cy += 2.5;
+      doc.setDrawColor(...BRAND.accent);
+      doc.setLineWidth(0.4);
+      doc.line(x, cy, x + width, cy);
+      cy += 5.5;
+
+      treatments.forEach((t, i) => {
+        if (i % 2 === 0) {
+          doc.setFillColor(...BRAND.accentLight);
+          doc.rect(x, cy - 4.1, width, ROW_H, "F");
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(ROW_FONT_SIZE);
+        doc.setTextColor(...BRAND.ink);
+        doc.text(t.label, colX[0] + cols[0].w / 2, cy, { align: "center" });
+
+        doc.setFont("helvetica", "normal");
+        doc.text(t.productos, colX[1] + 2.5, cy, { maxWidth: cols[1].w - 4 });
+
+        doc.setFont("courier", "bold");
+        doc.setTextColor(...BRAND.accent);
+        doc.text(t.dosis, colX[2] + cols[2].w - 2.5, cy, { align: "right", maxWidth: cols[2].w - 4 });
+        doc.text(t.dosisCarga, colX[3] + cols[3].w - 2.5, cy, { align: "right", maxWidth: cols[3].w - 4 });
+
+        doc.setFont("courier", "normal");
+        doc.setTextColor(...BRAND.ink);
+        doc.text(t.remanente, colX[4] + cols[4].w - 2.5, cy, { align: "right" });
+
+        cy += ROW_H;
+      });
+
+      return cy;
+    });
+  }
+
+  async function generate(reportState) {
     if (!window.jspdf || !window.jspdf.jsPDF) {
       throw new Error("jsPDF no está disponible todavía.");
     }
@@ -297,13 +391,15 @@
     const leftX = marginX;
     const rightX = marginX + colWidth + columnGap;
 
-    let y0 = drawHeader(doc, pageWidth);
+    const logoDataUrl = await loadLogoDataUrl();
 
-    // Columnas superiores: izquierda (ítems 1-4) y derecha (ítems 5-7)
+    let y0 = drawHeader(doc, pageWidth, logoDataUrl);
+
+    // Columnas superiores: izquierda (ítems 1-2) y derecha (ítems 3-5)
     const yLeftEnd = drawLeftColumn(doc, leftX, y0, reportState, colWidth);
-    const yRightEnd = drawSectionsColumn(doc, rightX, y0, reportState.rightColumnSections, colWidth);
+    const yRightEnd = drawRightColumn(doc, rightX, y0, reportState, colWidth);
 
-    let y = Math.max(yLeftEnd, yRightEnd) + 4;
+    let y = Math.max(yLeftEnd, yRightEnd) + 3;
 
     // Salvaguarda: si por algún motivo el contenido no cupiera en una sola
     // página (p.ej. muchos tratamientos), se continúa en una página nueva en
@@ -311,10 +407,10 @@
     const estimatedTableHeight = 12 + reportState.treatments.length * ROW_H + 6;
     if (y + estimatedTableHeight > pageHeight - PAGE.marginBottom) {
       doc.addPage();
-      y = drawHeader(doc, pageWidth);
+      y = drawHeader(doc, pageWidth, logoDataUrl);
     }
 
-    // Ítem 8, a todo el ancho
+    // Ítem 6, a todo el ancho
     drawTreatmentsTable(doc, marginX, y, reportState.treatments, contentWidth);
 
     const totalPages = doc.getNumberOfPages();

@@ -135,6 +135,34 @@ body {
   gap: 1rem;
 }
 
+.clear-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  margin-top: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.74rem;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 40%, var(--line));
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.clear-all-btn .icon {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+.clear-all-btn:hover {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  border-color: color-mix(in srgb, var(--error) 60%, var(--line));
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -143,9 +171,12 @@ body {
 }
 
 .brand__mark {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
 }
 
 .brand__name {
@@ -292,7 +323,66 @@ body {
 .sheet {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-6);
+}
+
+/* ==========================================================
+   Macro secciones (agrupan varias tarjetas bajo un mismo título)
+   ========================================================== */
+.macro-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.macro-section__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 var(--space-4);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--line);
+  transition: border-color 0.3s ease;
+}
+
+.macro-section__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-align: center;
+}
+
+.clear-section-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.74rem;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 40%, var(--line));
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.clear-section-btn .icon {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+.clear-section-btn:hover {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  border-color: color-mix(in srgb, var(--error) 60%, var(--line));
 }
 
 .card {
@@ -466,6 +556,11 @@ body {
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.result-line:last-child {
+  margin-bottom: 0;
 }
 
 .result-line span {
@@ -601,16 +696,20 @@ body {
    tratamientos y productos)
    ========================================================== */
 .treatment-block {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: var(--space-4);
+  padding-top: var(--space-4);
   margin-bottom: var(--space-4);
-  background: color-mix(in srgb, var(--ink) 2%, transparent);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.treatment-block:first-child {
+  padding-top: 0;
+}
+
+.treatment-block:not(:first-child) {
+  border-top: 1px dashed var(--line);
 }
 
 .treatment-block:last-child {
-  margin-bottom: var(--space-3);
+  margin-bottom: 0;
 }
 
 .treatment-block__header {
@@ -800,4 +899,119 @@ body {
 
 .pdf-message.is-success {
   color: var(--success);
+}
+
+/* ==========================================================
+   Diálogo de confirmación (botones "Limpiar")
+   ========================================================== */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: color-mix(in srgb, black 38%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.confirm-overlay.is-open {
+  opacity: 1;
+}
+
+.confirm-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-5);
+  background: var(--card-solid);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  transform: translateY(6px) scale(0.98);
+  transition: transform 0.18s ease;
+}
+
+.confirm-overlay.is-open .confirm-dialog {
+  transform: translateY(0) scale(1);
+}
+
+.confirm-dialog__close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.confirm-dialog__close:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.confirm-dialog h3 {
+  margin: 0 var(--space-4) var(--space-2) 0;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.confirm-dialog p {
+  margin: 0 0 var(--space-5);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.confirm-dialog__cancel,
+.confirm-dialog__confirm {
+  padding: 0.55rem 1.1rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.86rem;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: filter 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.confirm-dialog__cancel {
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.confirm-dialog__cancel:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--line));
+}
+
+.confirm-dialog__confirm {
+  color: #ffffff;
+  background: var(--error);
+  border: 1px solid var(--error);
+}
+
+.confirm-dialog__confirm:hover {
+  filter: brightness(1.08);
 }
