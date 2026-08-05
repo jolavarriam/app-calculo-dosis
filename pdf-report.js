@@ -241,11 +241,14 @@
    * resto de las filas (p.ej. Caldo total calculado, Caldo a preparar
    * redondeado), pudiendo apilarse una debajo de la otra.
    */
-  function drawTotalRow(doc, x, y, width, label, valueText) {
-    let ry = y + 3;
-    doc.setDrawColor(...BRAND.accent);
-    doc.setLineWidth(0.5);
-    doc.line(x, ry - 3.6, x + width, ry - 3.6);
+  function drawTotalRow(doc, x, y, width, label, valueText, withLine = true) {
+    let ry = y + (withLine ? 3 : 0);
+
+    if (withLine) {
+      doc.setDrawColor(...BRAND.accent);
+      doc.setLineWidth(0.5);
+      doc.line(x, ry - 3.6, x + width, ry - 3.6);
+    }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(ROW_FONT_SIZE);
@@ -265,7 +268,7 @@
     let cy = drawSection(doc, x, y, "1. Calibración de boquilla", (rowY) => {
       let ry = rowY;
       reportState.samples.forEach((sample, i) => {
-        ry = drawInlineRow(doc, x, ry, i, sample.label, `${sample.volume} L`, `${sample.gasto} L/min`, width);
+        ry = drawInlineRow(doc, x, ry, i, sample.label, `${sample.volume} L/20s`, `${sample.gasto} L/min`, width);
       });
 
       return drawTotalRow(
@@ -307,14 +310,15 @@
       let ry = drawRow(doc, x, rowY, caldo.area, 0, width);
       ry = drawRow(doc, x, ry, caldo.caldoNecesario, 1, width);
       ry = drawRow(doc, x, ry, caldo.remanente, 2, width);
-      ry = drawTotalRow(doc, x, ry, width, caldo.caldoTotal.label, `${caldo.caldoTotal.value} ${caldo.caldoTotal.unit}`);
+      ry = drawTotalRow(doc, x, ry, width, caldo.caldoTotal.label, `${caldo.caldoTotal.value} ${caldo.caldoTotal.unit}`, true);
       ry = drawTotalRow(
         doc,
         x,
         ry,
         width,
         caldo.caldoPreparar.label,
-        `${caldo.caldoPreparar.value} ${caldo.caldoPreparar.unit}`
+        `${caldo.caldoPreparar.value} ${caldo.caldoPreparar.unit}`,
+        false
       );
       return ry;
     });

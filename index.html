@@ -51,15 +51,6 @@
         </div>
 
         <div class="topbar__actions">
-          <button id="clearAllBtn" type="button" class="clear-all-btn" data-clear-scope="todo">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16"></path>
-              <path d="M9 7V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"></path>
-              <path d="M6.5 7l0.8 12a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9L17.5 7"></path>
-            </svg>
-            Limpiar todo
-          </button>
-
           <button
             id="themeToggle"
             class="theme-toggle"
@@ -75,6 +66,15 @@
             <svg class="icon theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a7 7 0 0 0 10.2 10.2Z"></path>
             </svg>
+          </button>
+
+          <button id="clearAllBtn" type="button" class="clear-all-btn" data-clear-scope="todo">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16"></path>
+              <path d="M9 7V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"></path>
+              <path d="M6.5 7l0.8 12a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9L17.5 7"></path>
+            </svg>
+            Limpiar todo
           </button>
         </div>
       </div>
@@ -249,7 +249,7 @@
             <span class="field__error" id="err-areaEnsayo"></span>
           </div>
 
-          <div class="result-line">
+          <div class="result-line result-line--gap-lg">
             <span>Caldo necesario (calculado)</span>
             <output class="computed computed--lg" id="caldoCalc">– L</output>
           </div>

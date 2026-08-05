@@ -124,7 +124,6 @@ body {
 .topbar {
   padding: 0 0 1.75rem;
   margin-bottom: 1.75rem;
-  border-bottom: 1px solid var(--line);
   transition: border-color 0.3s ease;
 }
 
@@ -147,6 +146,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  margin-top: var(--space-6);
   padding: 0.4rem 0.7rem;
   font-family: var(--font-body);
   font-weight: 600;
@@ -346,9 +346,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0 var(--space-4);
-  margin-bottom: var(--space-1);
-  border-bottom: 1px solid var(--line);
+  padding: var(--space-4) 0 0;
+  margin-bottom: var(--space-2);
+  border-top: 1px solid var(--line);
   transition: border-color 0.3s ease;
 }
 
@@ -365,7 +365,7 @@ body {
 .clear-section-btn {
   position: absolute;
   right: 0;
-  top: 0;
+  top: var(--space-4);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -590,6 +590,13 @@ body {
   margin-top: var(--space-2);
   padding-top: var(--space-4);
   border-top: 1px dashed var(--line);
+}
+
+/* Da al bloque un margen inferior igual al margen superior que ya le da el
+   campo anterior (field--gap-bottom), para que la separación se vea
+   uniforme por arriba y por abajo. */
+.result-line--gap-lg {
+  margin-bottom: var(--space-4);
 }
 
 /* ==========================================================

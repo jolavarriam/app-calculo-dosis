@@ -348,10 +348,13 @@ function renderTreatments() {
 addTreatmentBtn.addEventListener("click", () => {
   if (treatments.length >= MAX_TREATMENTS) return;
   const newUid = nextTreatmentUid++;
-  treatments.push({ uid: newUid, products: [{ uid: nextProductUid++ }] });
+  const newProductUid = nextProductUid++;
+  treatments.push({ uid: newUid, products: [{ uid: newProductUid }] });
   renderTreatments();
   recalculate();
   saveState();
+  const nameInput = document.getElementById(prodNameId(newUid, newProductUid));
+  if (nameInput) nameInput.focus();
 });
 
 treatmentsContainer.addEventListener("click", (event) => {
@@ -371,10 +374,13 @@ treatmentsContainer.addEventListener("click", (event) => {
     const tuid = Number(addProductBtn.dataset.addProductTuid);
     const treatment = treatments.find((t) => t.uid === tuid);
     if (treatment && treatment.products.length < MAX_PRODUCTS_PER_TREATMENT) {
-      treatment.products.push({ uid: nextProductUid++ });
+      const newProductUid = nextProductUid++;
+      treatment.products.push({ uid: newProductUid });
       renderTreatments();
       recalculate();
       saveState();
+      const nameInput = document.getElementById(prodNameId(tuid, newProductUid));
+      if (nameInput) nameInput.focus();
     }
     return;
   }
