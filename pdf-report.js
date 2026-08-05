@@ -4,13 +4,17 @@
  * generar el PDF sin conexión una vez que la PWA quedó instalada/cacheada.
  *
  * Layout: arriba, en dos columnas — izquierda: ítem 1 (muestras de
- * calibración, siempre 3) + ítem 2 (ancho de boquilla); derecha: ítem 3
- * (Velocidad: avance, cobertura y mojamiento), ítem 4 (área de ensayo) e
- * ítem 5 (caldo). Debajo, a todo el ancho, el ítem 6 (Tratamientos): una
- * fila por tratamiento, con los nombres de producto, dosis y dosis por
- * carga en notación de suma literal (no calculada), y el remanente del
- * tratamiento. Cada título de sección lleva una línea vertical a un costado
- * que recorre todo el contenido de esa sección (en vez de un subrayado).
+ * calibración, siempre 3) + ítem 2 (Velocidad: ancho de boquilla, avance,
+ * cobertura y mojamiento); derecha: ítem 3 (Caldo: área de ensayo, caldo
+ * necesario, remanente, y — en formato de resultado, uno debajo del otro —
+ * caldo total calculado y caldo a preparar redondeado). Debajo, a todo el
+ * ancho, el ítem 4 (Tratamientos): una fila por tratamiento, con los
+ * nombres de producto, dosis y dosis por carga en notación de suma literal
+ * (no calculada), y el remanente del tratamiento. Si el nombre de los
+ * productos no cabe en una línea, la fila crece y el resto de columnas se
+ * centra verticalmente. Cada título de sección lleva una línea vertical a
+ * un costado que recorre todo el contenido de esa sección (en vez de un
+ * subrayado).
  *
  * Expone window.DosisPDF.generate(reportState), que devuelve una Promise
  * (necesita cargar el logo de la app antes de dibujar el encabezado).
@@ -19,13 +23,17 @@
  *   fileName: string,
  *   samples: [{ label, volume, gasto }],       // siempre 3 muestras
  *   gastoPromedio: { value, unit },
- *   leftColumnSections: [ { title, rows: [{ label, value, unit }] } ],   // ítem 2
- *   rightColumnSections: [ { title, rows: [{ label, value, unit }] } ],  // ítems 4-5
- *   velocidad: {                                                        // ítem 3
- *     title, avance: { label, msValue, mminValue },
+ *   velocidad: {                                                        // ítem 2
+ *     title, ancho: { label, value, unit },
+ *     avance: { label, msValue, mminValue },
  *     cobertura: { label, value, unit }, mojamiento: { label, value, unit },
  *   },
- *   treatments: [ { label, productos, dosis, dosisCarga, remanente } ], // ítem 6
+ *   caldo: {                                                            // ítem 3
+ *     title, area: { label, value, unit },
+ *     caldoNecesario: { label, value, unit }, remanente: { label, value, unit },
+ *     caldoTotal: { label, value, unit }, caldoPreparar: { label, value, unit },
+ *   },
+ *   treatments: [ { label, productos, dosis, dosisCarga, remanente } ], // ítem 4
  * }
  */
 (function () {
@@ -49,6 +57,7 @@
 
   const ROW_H = 6.3; // alto de fila estándar
   const SAMPLE_ROW_H = 5.8; // alto de fila compacta (muestras y avance)
+  const LINE_H = 4.2; // alto de línea extra cuando una celda pasa a 2+ líneas
   const SECTION_GAP = 4; // espacio regular entre secciones
   const ROW_FONT_SIZE = 9; // tamaño uniforme para el texto de todas las filas
   const LOGO_PATH = "icons/icon-192.png";
@@ -90,6 +99,8 @@
   function drawHeader(doc, pageWidth, logoDataUrl) {
     const { marginX, marginTop } = PAGE;
 
+    // Logo real de la app (icono de la PWA); solo si no está disponible se
+    // usa el isotipo "DC" de respaldo.
     if (logoDataUrl) {
       try {
         doc.addImage(logoDataUrl, "PNG", marginX, marginTop - 6, 10, 10, undefined, "FAST");
@@ -223,7 +234,33 @@
     return y + SAMPLE_ROW_H;
   }
 
-  /** Columna izquierda: ítem 1 (muestras + promedio) seguido del ítem 2. */
+  /**
+   * Fila "de resultado" a todo el ancho de la columna: regla superior +
+   * etiqueta en negrita + valor destacado, igual formato que "Gasto de
+   * boquilla promedio". Se usa para totales que deben resaltar sobre el
+   * resto de las filas (p.ej. Caldo total calculado, Caldo a preparar
+   * redondeado), pudiendo apilarse una debajo de la otra.
+   */
+  function drawTotalRow(doc, x, y, width, label, valueText) {
+    let ry = y + 3;
+    doc.setDrawColor(...BRAND.accent);
+    doc.setLineWidth(0.5);
+    doc.line(x, ry - 3.6, x + width, ry - 3.6);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(ROW_FONT_SIZE);
+    doc.setTextColor(...BRAND.ink);
+    doc.text(label, x + 2.5, ry);
+
+    doc.setFont("courier", "bold");
+    doc.setFontSize(ROW_FONT_SIZE);
+    doc.setTextColor(...BRAND.accent);
+    doc.text(valueText, x + width - 2.5, ry, { align: "right" });
+
+    return ry + ROW_H;
+  }
+
+  /** Columna superior izquierda: ítem 1 (muestras + promedio) seguido del ítem 2 (Velocidad). */
   function drawLeftColumn(doc, x, y, reportState, width) {
     let cy = drawSection(doc, x, y, "1. Calibración de boquilla", (rowY) => {
       let ry = rowY;
@@ -231,95 +268,85 @@
         ry = drawInlineRow(doc, x, ry, i, sample.label, `${sample.volume} L`, `${sample.gasto} L/min`, width);
       });
 
-      // Espacio + regla superior sutil antes del promedio, para diferenciarlo
-      // de las muestras individuales sin usar un bloque de color fuerte.
-      ry += 3;
-      doc.setDrawColor(...BRAND.accent);
-      doc.setLineWidth(0.5);
-      doc.line(x, ry - 3.6, x + width, ry - 3.6);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(ROW_FONT_SIZE);
-      doc.setTextColor(...BRAND.ink);
-      doc.text("Gasto de boquilla promedio", x + 2.5, ry);
-
-      doc.setFont("courier", "bold");
-      doc.setFontSize(ROW_FONT_SIZE);
-      doc.setTextColor(...BRAND.accent);
-      doc.text(`${reportState.gastoPromedio.value} ${reportState.gastoPromedio.unit}`, x + width - 2.5, ry, {
-        align: "right",
-      });
-
-      return ry + ROW_H;
+      return drawTotalRow(
+        doc,
+        x,
+        ry,
+        width,
+        "Gasto de boquilla promedio",
+        `${reportState.gastoPromedio.value} ${reportState.gastoPromedio.unit}`
+      );
     });
 
     cy += SECTION_GAP;
 
-    // Ítem 2, en la misma columna
-    reportState.leftColumnSections.forEach((section) => {
-      cy = drawSection(doc, x, cy, section.title, (rowY) => {
-        let ry = rowY;
-        section.rows.forEach((row, i) => {
-          ry = drawRow(doc, x, ry, row, i, width);
-        });
-        return ry;
-      });
-      cy += SECTION_GAP;
-    });
+    cy = drawVelocidadSection(doc, x, cy, reportState.velocidad, width);
 
     return cy;
   }
 
-  /** Ítem 3 (Velocidad): avance (ingresado + calculado), cobertura y mojamiento. */
+  /** Ítem 2 (Velocidad): ancho de boquilla, avance (ingresado + calculado), cobertura y mojamiento. */
   function drawVelocidadSection(doc, x, y, velocidad, width) {
-    let cy = drawSection(doc, x, y, velocidad.title, (rowY) => {
-      let ry = drawInlineRow(
-        doc,
-        x,
-        rowY,
-        0,
-        velocidad.avance.label,
-        velocidad.avance.msValue,
-        velocidad.avance.mminValue,
-        width
-      );
-      ry = drawRow(doc, x, ry, velocidad.cobertura, 1, width);
-      ry = drawRow(doc, x, ry, velocidad.mojamiento, 2, width);
+    return drawSection(doc, x, y, velocidad.title, (rowY) => {
+      let ry = drawRow(doc, x, rowY, velocidad.ancho, 0, width);
+      ry = drawInlineRow(doc, x, ry, 1, velocidad.avance.label, velocidad.avance.msValue, velocidad.avance.mminValue, width);
+      ry = drawRow(doc, x, ry, velocidad.cobertura, 2, width);
+      ry = drawRow(doc, x, ry, velocidad.mojamiento, 3, width);
       return ry;
     });
-
-    return cy + SECTION_GAP;
   }
 
-  /** Columna derecha: ítem 3 (Velocidad) seguido de los ítems 4 y 5. */
+  /**
+   * Columna superior derecha: ítem 3 (Caldo, incluye área de ensayo).
+   * Caldo total calculado y Caldo a preparar redondeado se dibujan en
+   * formato de resultado, uno debajo del otro.
+   */
   function drawRightColumn(doc, x, y, reportState, width) {
-    let cy = drawVelocidadSection(doc, x, y, reportState.velocidad, width);
-
-    reportState.rightColumnSections.forEach((section) => {
-      cy = drawSection(doc, x, cy, section.title, (rowY) => {
-        let ry = rowY;
-        section.rows.forEach((row, i) => {
-          ry = drawRow(doc, x, ry, row, i, width);
-        });
-        return ry;
-      });
-      cy += SECTION_GAP;
+    const caldo = reportState.caldo;
+    return drawSection(doc, x, y, caldo.title, (rowY) => {
+      let ry = drawRow(doc, x, rowY, caldo.area, 0, width);
+      ry = drawRow(doc, x, ry, caldo.caldoNecesario, 1, width);
+      ry = drawRow(doc, x, ry, caldo.remanente, 2, width);
+      ry = drawTotalRow(doc, x, ry, width, caldo.caldoTotal.label, `${caldo.caldoTotal.value} ${caldo.caldoTotal.unit}`);
+      ry = drawTotalRow(
+        doc,
+        x,
+        ry,
+        width,
+        caldo.caldoPreparar.label,
+        `${caldo.caldoPreparar.value} ${caldo.caldoPreparar.unit}`
+      );
+      return ry;
     });
-
-    return cy;
   }
 
-  /** Ítem 6, a todo el ancho: tabla de tratamientos con notación de suma. */
+  /**
+   * Dibuja las líneas de una celda (ya divididas con splitTextToSize),
+   * centrándolas verticalmente respecto al máximo de líneas de la fila.
+   */
+  function drawCellLines(doc, lines, xPos, cy, maxLines, align) {
+    const startOffset = ((maxLines - lines.length) * LINE_H) / 2;
+    lines.forEach((line, li) => {
+      const ly = cy + startOffset + li * LINE_H;
+      if (align) {
+        doc.text(line, xPos, ly, { align });
+      } else {
+        doc.text(line, xPos, ly);
+      }
+    });
+  }
+
+  /** Ítem 4, a todo el ancho: tabla de tratamientos con notación de suma. */
   function drawTreatmentsTable(doc, x, y, treatments, width) {
-    return drawSection(doc, x, y, "6. Tratamientos", (rowY) => {
+    return drawSection(doc, x, y, "4. Tratamientos", (rowY) => {
       let cy = rowY;
 
-      // La primera columna solo lleva el número de tratamiento (sin
-      // encabezado "Tratamiento") para dejar más espacio a nombre y dosis.
+      // Columna de índice y de dosis reducidas, para dar más espacio a los
+      // nombres de producto y así necesitar menos seguido pasar a 2 líneas.
       const cols = [
-        { key: "label", header: "", w: width * 0.06, align: "center" },
-        { key: "productos", header: "Producto(s)", w: width * 0.29, align: "left" },
-        { key: "dosis", header: "Dosis (kg o L/ha)", w: width * 0.25, align: "right" },
+        { key: "label", header: "", w: width * 0.04, align: "center" },
+        { key: "productos", header: "Producto(s)", w: width * 0.37, align: "left" },
+        { key: "dosis", header: "Dosis (kg o L/ha)", w: width * 0.19, align: "right" },
         { key: "dosisCarga", header: "Dosis por carga (g o mL)", w: width * 0.25, align: "right" },
         { key: "remanente", header: "Remanente (L)", w: width * 0.15, align: "right" },
       ];
@@ -347,29 +374,39 @@
       cy += 5.5;
 
       treatments.forEach((t, i) => {
+        const prodLines = doc.splitTextToSize(t.productos, cols[1].w - 4);
+        const dosisLines = doc.splitTextToSize(t.dosis, cols[2].w - 4);
+        const dosisCargaLines = doc.splitTextToSize(t.dosisCarga, cols[3].w - 4);
+        const remanenteLines = doc.splitTextToSize(t.remanente, cols[4].w - 4);
+        const maxLines = Math.max(1, prodLines.length, dosisLines.length, dosisCargaLines.length, remanenteLines.length);
+        const rowHeight = ROW_H + (maxLines - 1) * LINE_H;
+
         if (i % 2 === 0) {
           doc.setFillColor(...BRAND.accentLight);
-          doc.rect(x, cy - 4.1, width, ROW_H, "F");
+          doc.rect(x, cy - 4.1, width, rowHeight, "F");
         }
+
+        const centerY = cy + ((maxLines - 1) * LINE_H) / 2;
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(ROW_FONT_SIZE);
         doc.setTextColor(...BRAND.ink);
-        doc.text(t.label, colX[0] + cols[0].w / 2, cy, { align: "center" });
+        doc.text(t.label, colX[0] + cols[0].w / 2, centerY, { align: "center" });
 
         doc.setFont("helvetica", "normal");
-        doc.text(t.productos, colX[1] + 2.5, cy, { maxWidth: cols[1].w - 4 });
+        doc.setTextColor(...BRAND.ink);
+        drawCellLines(doc, prodLines, colX[1] + 2.5, cy, maxLines);
 
         doc.setFont("courier", "bold");
         doc.setTextColor(...BRAND.accent);
-        doc.text(t.dosis, colX[2] + cols[2].w - 2.5, cy, { align: "right", maxWidth: cols[2].w - 4 });
-        doc.text(t.dosisCarga, colX[3] + cols[3].w - 2.5, cy, { align: "right", maxWidth: cols[3].w - 4 });
+        drawCellLines(doc, dosisLines, colX[2] + cols[2].w - 2.5, cy, maxLines, "right");
+        drawCellLines(doc, dosisCargaLines, colX[3] + cols[3].w - 2.5, cy, maxLines, "right");
 
         doc.setFont("courier", "normal");
         doc.setTextColor(...BRAND.ink);
-        doc.text(t.remanente, colX[4] + cols[4].w - 2.5, cy, { align: "right" });
+        drawCellLines(doc, remanenteLines, colX[4] + cols[4].w - 2.5, cy, maxLines, "right");
 
-        cy += ROW_H;
+        cy += rowHeight;
       });
 
       return cy;
@@ -395,22 +432,23 @@
 
     let y0 = drawHeader(doc, pageWidth, logoDataUrl);
 
-    // Columnas superiores: izquierda (ítems 1-2) y derecha (ítems 3-5)
+    // Columnas superiores: izquierda (ítems 1-2) y derecha (ítem 3)
     const yLeftEnd = drawLeftColumn(doc, leftX, y0, reportState, colWidth);
     const yRightEnd = drawRightColumn(doc, rightX, y0, reportState, colWidth);
 
     let y = Math.max(yLeftEnd, yRightEnd) + 3;
 
     // Salvaguarda: si por algún motivo el contenido no cupiera en una sola
-    // página (p.ej. muchos tratamientos), se continúa en una página nueva en
-    // vez de dibujar fuera del área visible.
-    const estimatedTableHeight = 12 + reportState.treatments.length * ROW_H + 6;
+    // página (p.ej. muchos tratamientos o nombres largos que ocupan varias
+    // líneas), se continúa en una página nueva en vez de dibujar fuera del
+    // área visible.
+    const estimatedTableHeight = 12 + reportState.treatments.length * (ROW_H + LINE_H) + 6;
     if (y + estimatedTableHeight > pageHeight - PAGE.marginBottom) {
       doc.addPage();
       y = drawHeader(doc, pageWidth, logoDataUrl);
     }
 
-    // Ítem 6, a todo el ancho
+    // Ítem 4, a todo el ancho
     drawTreatmentsTable(doc, marginX, y, reportState.treatments, contentWidth);
 
     const totalPages = doc.getNumberOfPages();

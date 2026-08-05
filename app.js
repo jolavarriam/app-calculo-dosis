@@ -725,34 +725,11 @@ function recalculate() {
       gasto: gastoBySample[i] !== null ? pdfTrim(nf2.format(gastoBySample[i])) : "–",
     })),
     gastoPromedio: { value: gastoProm !== null ? pdfTrim(nf2.format(gastoProm)) : "–", unit: "L/min" },
-    // Columna izquierda del PDF: ítem 1 (muestras, dibujado aparte) + ítem 2
-    leftColumnSections: [
-      {
-        title: "2. Ancho de boquilla",
-        rows: [{ label: "Ancho de boquilla", value: pdfTrim(nf2.format(ancho ?? 0)), unit: "m" }],
-      },
-    ],
-    // Columna derecha del PDF: ítems 3 (Velocidad, dibujado aparte), 4 y 5
-    rightColumnSections: [
-      {
-        title: "4. Área de ensayo",
-        rows: [{ label: "Área de ensayo", value: pdfTrim(nf2.format(area ?? 0)), unit: "m²" }],
-      },
-      {
-        title: "5. Caldo",
-        rows: [
-          { label: "Caldo necesario", value: caldoCalc !== null ? pdfTrim(nf2.format(caldoCalc)) : "–", unit: "L" },
-          { label: "Remanente mochila", value: pdfTrim(nf2.format(remanente)), unit: "L" },
-          { label: "Caldo total", value: caldoTotal !== null ? pdfTrim(nf2.format(caldoTotal)) : "–", unit: "L" },
-          { label: "Caldo a preparar", value: caldoEfectivo !== null ? pdfTrim(nf2.format(caldoEfectivo)) : "–", unit: "L" },
-        ],
-      },
-    ],
-    // Ítem 3 (Velocidad): avance (ingresado + calculado, en una sola fila
-    // como las muestras), seguido de cobertura y mojamiento. Se dibuja al
-    // inicio de la columna derecha del PDF.
+    // Columna superior izquierda del PDF: ítem 1 (muestras, dibujado aparte)
+    // seguido del ítem 2 (Velocidad, incluye ancho de boquilla).
     velocidad: {
-      title: "3. Velocidad",
+      title: "2. Velocidad",
+      ancho: { label: "Ancho de boquilla", value: pdfTrim(nf2.format(ancho ?? 0)), unit: "m" },
       avance: {
         label: "Avance",
         msValue: avanceOk ? `${pdfTrim(nf2.format(avanceMs))} m/s` : "–",
@@ -761,7 +738,31 @@ function recalculate() {
       cobertura: { label: "Cobertura", value: m2min !== null ? pdfTrim(nf2.format(m2min)) : "–", unit: "m²/min" },
       mojamiento: { label: "Mojamiento", value: mojamiento !== null ? pdfTrim(nf0.format(mojamiento)) : "–", unit: "L/ha" },
     },
-    // Ítem 6, a todo el ancho: un tratamiento por fila, con productos, dosis
+    // Columna superior derecha del PDF: ítem 3 (Caldo, incluye área de
+    // ensayo). Caldo total calculado y Caldo a preparar redondeado se
+    // dibujan en formato de resultado (como Gasto de boquilla promedio),
+    // uno debajo del otro.
+    caldo: {
+      title: "3. Caldo",
+      area: { label: "Área de ensayo", value: pdfTrim(nf2.format(area ?? 0)), unit: "m²" },
+      caldoNecesario: {
+        label: "Caldo necesario",
+        value: caldoCalc !== null ? pdfTrim(nf2.format(caldoCalc)) : "–",
+        unit: "L",
+      },
+      remanente: { label: "Remanente mochila", value: pdfTrim(nf2.format(remanente)), unit: "L" },
+      caldoTotal: {
+        label: "Caldo total calculado",
+        value: caldoTotal !== null ? pdfTrim(nf2.format(caldoTotal)) : "–",
+        unit: "L",
+      },
+      caldoPreparar: {
+        label: "Caldo a preparar redondeado",
+        value: caldoEfectivo !== null ? pdfTrim(nf2.format(caldoEfectivo)) : "–",
+        unit: "L",
+      },
+    },
+    // Ítem 4, a todo el ancho: un tratamiento por fila, con productos, dosis
     // y dosis por carga en notación de suma literal (no calculada).
     treatments: treatmentRows.map((t) => ({
       ...t,

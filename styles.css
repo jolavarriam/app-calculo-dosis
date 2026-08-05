@@ -135,12 +135,18 @@ body {
   gap: 1rem;
 }
 
+.topbar__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
 .clear-all-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  align-self: flex-start;
-  margin-top: 0.85rem;
   padding: 0.4rem 0.7rem;
   font-family: var(--font-body);
   font-weight: 600;
@@ -455,6 +461,10 @@ body {
 
 .field--solo {
   margin-top: var(--space-1);
+}
+
+.field--gap-bottom {
+  margin-bottom: var(--space-4);
 }
 
 .field label {

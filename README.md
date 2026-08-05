@@ -33,16 +33,15 @@ El formulario permite en un paso a paso el cálculo de dosis de aplicación:
 1. **Calibración de boquilla** — se ingresa el volumen recolectado (L) en 20
    segundos, siempre en **3 muestras fijas**; cada una se convierte a gasto
    (L/min) y se promedian entre las 3.
-2. **Ancho de boquilla (m)**.
-3. **Avance** — velocidad en m/s, convertida a m/min.
-4. **Cobertura (m²/min)** — ancho de boquilla × avance.
-5. **Mojamiento (L/ha)** — gasto promedio × 10.000 ÷ cobertura.
-6. **Área de ensayo (m²)**.
-7. **Caldo** — caldo necesario (mojamiento × área), remanente de mochila
-   (0,8 L por defecto) y caldo total; además, el caldo a preparar
-   (redondeado a la capacidad real del estanque/mochila), que es el valor
-   sobre el que se calcula la dosis de cada producto.
-8. **Tratamientos** — se puede agregar **uno o más tratamientos** (hasta 30).
+2. **Velocidad** — ancho de boquilla (m), avance en m/s (convertido a
+   m/min), cobertura (m²/min, ancho × avance) y mojamiento (L/ha, gasto
+   promedio × 10.000 ÷ cobertura).
+3. **Caldo** — área de ensayo (m²), caldo necesario (mojamiento × área),
+   remanente de mochila (0,8 L por defecto) y caldo total calculado;
+   además, el caldo a preparar redondeado (a la capacidad real del
+   estanque/mochila), que es el valor sobre el que se calcula la dosis de
+   cada producto.
+4. **Tratamientos** — se puede agregar **uno o más tratamientos** (hasta 30).
    Cada tratamiento puede tener **hasta 3 productos**, cada uno con su
    nombre y su dosis (kg o L por hectárea); la dosis por carga de caldo de
    cada producto se calcula automáticamente (producto × caldo a preparar ×
@@ -64,9 +63,9 @@ tanto en modo online como offline. Si el navegador bloquea `localStorage`
 (por ejemplo en una ventana privada), la calculadora sigue funcionando con
 normalidad, simplemente no recordará los valores la próxima vez.
 
-## Informe en PDF: ítem 8 (Tratamientos)
+## Informe en PDF: ítem 4 (Tratamientos)
 
-En el PDF, el ítem 8 se muestra como una tabla a todo el ancho, con una
+En el PDF, el ítem 4 se muestra como una tabla a todo el ancho, con una
 fila por tratamiento. Si un tratamiento tiene más de un producto, los
 nombres, la dosis y la dosis por carga se muestran en **notación de suma
 literal** (no se suman matemáticamente), por ejemplo:
